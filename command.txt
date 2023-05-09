@@ -1,0 +1,24 @@
+dotnet new sln -n DatingApp
+dotnet new webapi -n DatingApp.API -o DatingApp.API
+dotnet sln add DatingApp.API
+
+Nuget package:
+	- Microsoft.EntityFrameworkCore
+	- Microsoft.EntityFrameworkCore.SqlServer
+	  or MySql.EntityFrameworkCore
+	- Microsoft.EntityFrameworkCore.Tools 
+	- Microsoft.EntityFrameworkCore.Design
+	- AutoMapper.Extensions.Microsoft.DependencyInjection
+	- Microsoft.AspNetCore.Identity.EntityFrameworkCore
+	- Microsoft.AspNetCore.Identity
+	- Microsoft.AspNetCore.Authentication.JwtBearer
+
+	- FirebaseAuthentication.net (3.7.2)
+	- FirebaseStorage.net (1.0.3)
+	- MailKit (3.6.0)
+	- Microsoft.AspNetCore.Mvc.NewtonsoftJson  (6.0.16)
+Cmd:
+	- dotnet-ef migrations add InitialDb -o Data/Migrations
+	- dotnet-ef database update
+	- dotnet build
+	- dotnet run
