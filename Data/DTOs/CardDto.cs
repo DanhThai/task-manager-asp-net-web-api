@@ -9,9 +9,9 @@ namespace TaskManager.API.Data.DTOs
         public int Id { get; internal set; }
         public string Name { get; set; }
         public int Code { get; set; }
-        [JsonIgnore]
-        public string TaskOrder { get; set; }
-        public List<int> ListTasksOrder { get; set; }
+        public string TaskOrder { get; internal set; }
+        public int TaskQuantity { get; set;}
+        public List<int> ListTaskIdOrder { get; internal set; } = null;
         public List<TaskItemDto> TaskItems { get; internal set; } = new List<TaskItemDto>();
     }
 }

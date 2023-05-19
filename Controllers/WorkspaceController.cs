@@ -10,7 +10,7 @@ namespace TaskManager.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    // [Authorize]
+    [Authorize]
 
     public class WorkspaceController : ControllerBase
     {
@@ -28,7 +28,6 @@ namespace TaskManager.API.Controllers
         // Console.WriteLine(s);
 
 
-
         [HttpPost]
         public async Task<IActionResult> CreateWorkspace(WorkspaceDto workspaceDto){
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -36,6 +35,32 @@ namespace TaskManager.API.Controllers
 
             var rs = await _workspaceRepository.CreateWorkspaceAsync(workspaceDto, userId, userName); 
             return Ok(rs);
+        }
+
+        [HttpPost("{id}/invite")]
+        public async Task<IActionResult> InviteUserToWorkspace(int id, string email){
+            try{
+                var rs = await _workspaceRepository.InviteUserToWorkspaceAsync(id, email); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpGet("invite/confirmed")]
+        public async Task<RedirectResult> ConfirmMemberWorkspace(int workspaceId, string userId){
+            try{
+                var rs = await _workspaceRepository.ConfirmMemberWorkspaceAsync(workspaceId, userId);
+                if(rs.IsSuccess) 
+                    return RedirectPermanent(rs.Message);
+                else
+                    return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");;
+            }
+            catch{
+                return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");;
+
+            }
         }
 
         [HttpGet("{id}", Name = "WorkspaceById")]
@@ -67,23 +92,25 @@ namespace TaskManager.API.Controllers
         }
 
 
-        [HttpPut]
-        public async Task<IActionResult> UpdateWorkspaceByUser(WorkspaceDto workspaceDto,[FromQuery] int workspaceId){
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateWorkspaceByUser(WorkspaceDto workspaceDto,int id){
             try{
                 // var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                workspaceDto.Id = workspaceId;         
-                var rs = await _workspaceRepository.UpdateWorkspaceAsync(workspaceDto); 
+                workspaceDto.Id = id;     
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                var rs = await _workspaceRepository.UpdateWorkspaceAsync(workspaceDto, userId); 
                 return Ok(rs);
             }
             catch{
                 return BadRequest();
             }
         }
-        [HttpDelete]
-        public async Task<IActionResult> DeleteWorkspaceByUser([FromQuery] int workspaceId){
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteWorkspaceByUser(int id){
             try{
                 // var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                var rs = await _workspaceRepository.DeleteWorkspaceAsync(workspaceId); 
+                var rs = await _workspaceRepository.DeleteWorkspaceAsync(id); 
                 return Ok(rs);
             }
             catch{

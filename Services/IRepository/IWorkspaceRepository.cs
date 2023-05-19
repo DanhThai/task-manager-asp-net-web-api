@@ -7,10 +7,11 @@ namespace TaskManager.API.Services.IRepository
     {
         public Task<Response> GetWorkspacesByUserAsync(string userId);
         public Task<Response> GetWorkspaceByIdAsync(int workspaceId, string userId);
-
         public Task<Response> CreateWorkspaceAsync(WorkspaceDto workspaceDto, string userId, string userName);
-        public Task<Response> UpdateWorkspaceAsync(WorkspaceDto workspaceDto);
+        public Task<Response> UpdateWorkspaceAsync(WorkspaceDto workspaceDto, string userId);
         public Task<Response> DeleteWorkspaceAsync(int workspaceId);
+        public Task<Response> InviteUserToWorkspaceAsync(int workspaceId, string email);
+        public Task<Response> ConfirmMemberWorkspaceAsync(int workspaceId, string userId);
         public Task<bool> SaveChangeAsync();
    
     }

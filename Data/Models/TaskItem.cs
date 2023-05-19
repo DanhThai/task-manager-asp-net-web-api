@@ -18,6 +18,8 @@ namespace TaskManager.API.Data.Models
         public string? Description { get; set; }
         public string? Attachment { get; set; }
         public string? FileName { get; set; }
+        public int SubtaskQuantity { get; set; } = 0;
+        public int SubtaskCompleted { get; set; } = 0;
         [Required]
         public PriorityEnum Priority { get; set; }
         // public DateTime? StartDate { get; set; }
@@ -28,6 +30,7 @@ namespace TaskManager.API.Data.Models
         // Relationship
         public int CardId { get; set; }
         public Card Card { get; set; }
+        public Checklist? Checklist { get; set; }
 
         public ICollection<UserTask> UserTasks { get; set; }= null;
         public ICollection<Account> Users { get; set; }= null;

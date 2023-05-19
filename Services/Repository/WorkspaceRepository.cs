@@ -7,6 +7,8 @@ using TaskManager.API.Data.Models;
 using TaskManager.API.Services.IRepository;
 using System.Data;
 using Newtonsoft.Json;
+using TaskManager.API.Helper;
+using Microsoft.AspNetCore.SignalR;
 
 namespace TaskManager.API.Services.Repository
 {
@@ -15,76 +17,98 @@ namespace TaskManager.API.Services.Repository
         private readonly DataContext _dataContext;
         private readonly IMapper _mapper;
         private readonly DapperContext _dapperContext;
+        private readonly IWebService _webService;
+        private readonly IConfiguration _configuration;
+        private IHubContext<HubService, IHubService> _hubService;
 
 
-        public WorkspaceRepository(DataContext dataContext, IMapper mapper, DapperContext dapperContext)
+        public WorkspaceRepository(DataContext dataContext, 
+            IMapper mapper, 
+            DapperContext dapperContext, 
+            IWebService webService, 
+            IConfiguration configuration, 
+            IHubContext<HubService, IHubService> hubService)
         {
-            this._dataContext = dataContext;
-            this._mapper = mapper;
+            _dataContext = dataContext;
+            _mapper = mapper;
             _dapperContext = dapperContext;
+            _webService = webService;
+            _configuration = configuration;
+            _hubService = hubService;
         }
 
         public async Task<Response> CreateWorkspaceAsync(WorkspaceDto workspaceDto, string userId, string userName)
         {
-            workspaceDto.Id = null;
-            Workspace workspace = _mapper.Map<WorkspaceDto, Workspace>(workspaceDto);
-            workspace.CreateAt = DateTime.UtcNow;
-            workspace.CreatorId = userId;
-            workspace.CreatorName = userName;
-            workspace.Cards = new List<Card>{
-                new Card("Todo", 0),
-                new Card("Doing", 1),
-                new Card("Done", 2),
-            };
-            var wsCreated = await _dataContext.Workspaces.AddAsync(workspace);
+            try{
+                Workspace workspace = _mapper.Map<WorkspaceDto, Workspace>(workspaceDto);
+                workspace.CreateAt = DateTime.Now;
+                workspace.CreatorId = userId;
+                workspace.CreatorName = userName;
+                workspace.Cards = new List<Card>{
+                    new Card("Todos", 0),
+                    new Card("In Progress", 1),
+                    new Card("Completed", 2),
+                };
+                var wsCreated = await _dataContext.Workspaces.AddAsync(workspace);
 
-            UserWorkspace userWorkspace = new UserWorkspace{
-                                                UserId = userId,
-                                                IsOwner = true};
-            userWorkspace.Workspace = workspace;
-            await _dataContext.UserWorkspaces.AddAsync(userWorkspace);   
+                UserWorkspace userWorkspace = new UserWorkspace{
+                                                    UserId = userId,
+                                                    IsOwner = true};
+                userWorkspace.Workspace = workspace;
+                await _dataContext.UserWorkspaces.AddAsync(userWorkspace); 
 
-            var save = await SaveChangeAsync();
-            if (save){
-                workspaceDto = _mapper.Map<Workspace, WorkspaceDto>(workspace);
+                var activation = new Activation{
+                                            UserId = userId,
+                                            Content = "Create workspace",
+                                            CreateAt = DateTime.Now};
+                activation.Workspace = workspace;
+                await _dataContext.Activations.AddAsync(activation);   
+
+                var save = await SaveChangeAsync();
+                if (save){
+                    workspaceDto = _mapper.Map<Workspace, WorkspaceDto>(workspace);
+
+                    return new Response{
+                        Message = "Created workspace successfully",
+                        Data = new Dictionary<string, object>{
+                            ["Workspace"] = workspaceDto
+                        },
+                        IsSuccess = true
+                    };
+                }
                 return new Response{
-                    Message = "Created workspace successfully",
-                    Data = new Dictionary<string, object>{
-                        ["Workspace"] = workspaceDto
-                    },
-                    IsSuccess = true
+                    Message = "Created workspace is failed",
+                    IsSuccess = false
                 };
             }
-            return new Response{
-                Message = "Created workspace is failed",
-                IsSuccess = false
-            };
+            catch (Exception e){
+                Console.WriteLine("GetWorkspaceByIdAsync: " + e.Message);
+                throw e;
+            }
         }
 
         public async Task<Response> GetWorkspaceByIdAsync(int workspaceId, string userId)
         {
             try{
-                // Get the workspace by Id from the database
-                // var query = @"SELECT w.Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, 
-                //                      u.Id, u.FullName, u.Email, u.Avatar
-                //               FROM Workspaces w
-                //               INNER JOIN (
-                //                 SELECT uw.WorkspaceId, u.Id, u.FullName, u.Email, u.Avatar
-                //                 From aspnetusers u  
-                //                 INNER JOIN UserWorkspaces uw on u.Id = uw.UserId 
-                //                 WHERE uw.WorkspaceId = @WorkspaceId
-                //               ) as u on w.Id = u.WorkspaceId
-                //               WHERE w.Id = @WorkspaceId";
-
+                var currentDay = DateTime.Now.AddDays(-10);
                 var query = @"SELECT Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName 
                               FROM Workspaces w WHERE w.Id = @WorkspaceId;" +
                             @"SELECT u.Id, u.FullName, u.Email, u.Avatar
                               FROM aspnetusers u  
                               INNER JOIN UserWorkspaces uw on u.Id = uw.UserId 
-                              WHERE uw.WorkspaceId = @WorkspaceId;";
+                              WHERE uw.WorkspaceId = @WorkspaceId;"+
+                            @"SELECT Content, CreateAt, UserId, Avatar, FullName
+                              FROM Activations a
+                              INNER JOIN aspnetusers u on u.Id = a.UserId 
+                              WHERE WorkspaceId = @WorkspaceId
+                              ORDER BY a.Id DESC LIMIT 10;"+
+                            @"SELECT Title, Content, Color, Date
+                              FROM Schedules
+                              WHERE WorkspaceId = @WorkspaceId AND Date >= @currentDay;";
 
                 var parameters = new DynamicParameters();
                 parameters.Add("WorkspaceId", workspaceId, DbType.Int32);  
+                parameters.Add("currentDay", currentDay, DbType.DateTime);  
 
                 WorkspaceDto workspaceDto = null;
                 using (var connection = _dapperContext.CreateConnection())
@@ -93,6 +117,8 @@ namespace TaskManager.API.Services.Repository
                     workspaceDto = await multiResult.ReadSingleOrDefaultAsync<WorkspaceDto>();
                     if (workspaceDto != null){
                         workspaceDto.Members = (await multiResult.ReadAsync<UserDto>()).ToList();
+                        workspaceDto.Activations = (await multiResult.ReadAsync<ActivationDto>()).ToList();
+                        workspaceDto.Schedules = (await multiResult.ReadAsync<ScheduleDto>()).ToList();
                     }
                 }
                 if (workspaceDto == null){
@@ -104,10 +130,10 @@ namespace TaskManager.API.Services.Repository
 
                 // Get list Card and Task Item
                 query = @"SELECT c.Id, c.Name, c.Code, c.TaskOrder,
-                                    t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId
-                              FROM Cards c  
-                              LEFT JOIN TaskItems t on c.Id = t.CardId 
-                              WHERE c.WorkspaceId = @WorkspaceId;";
+                                 t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.SubtaskQuantity, t.SubtaskCompleted
+                          FROM Cards c  
+                          LEFT JOIN TaskItems t on c.Id = t.CardId 
+                          WHERE c.WorkspaceId = @WorkspaceId;";
 
                 parameters = new DynamicParameters();
                 parameters.Add("WorkspaceId", workspaceId, DbType.Int32);  
@@ -118,13 +144,23 @@ namespace TaskManager.API.Services.Repository
                     var multiResult = await connection.QueryAsync<CardDto,TaskItemDto,CardDto>(
                     query, (card, taskItem)=>{
                         if(!cardDict.TryGetValue(card.Id, out var currentCard)){
-                            var listTaskItem = JsonConvert.DeserializeObject<List<int>>(card.TaskOrder);
+                            var listTaskItem = card.TaskOrder.ConvertStringToList();
                             currentCard = card;
-                            currentCard.ListTasksOrder = listTaskItem;
+                            currentCard.ListTaskIdOrder = listTaskItem;
+
+                            // create list task item = null 
+                            if(listTaskItem != null)
+                                for(int i = 0; i < listTaskItem.Count; i++){
+                                    currentCard.TaskItems.Add(null);
+                                }
                             cardDict.Add(card.Id, currentCard);
                         }
-                        if (taskItem != null)
-                            currentCard.TaskItems.Add(taskItem);
+                        if (taskItem != null){
+                            var index = currentCard.ListTaskIdOrder.IndexOf(taskItem.Id);
+                            if (index >= 0)
+                                currentCard.TaskItems[index] = taskItem;
+
+                        }
                         return currentCard;
                     }, 
                     parameters);
@@ -173,8 +209,6 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        
-
         public async Task<Response> DeleteWorkspaceAsync(int workspaceId)
         {
             try{
@@ -202,9 +236,8 @@ namespace TaskManager.API.Services.Repository
                 Console.WriteLine("DeleteWorkspaceAsync: " + e.Message);
                 throw e;
             }
-        }
-        
-        public async Task<Response> UpdateWorkspaceAsync(WorkspaceDto workspaceDto)
+        }  
+        public async Task<Response> UpdateWorkspaceAsync(WorkspaceDto workspaceDto, string userId)
         {
             try{
                 var workspace =  _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceDto.Id);
@@ -217,11 +250,24 @@ namespace TaskManager.API.Services.Repository
                 workspace.Title = workspaceDto.Title;
                 workspace.Description = workspaceDto.Description;
                 workspace.Permission = workspaceDto.Permission;
-                workspace.UpdateAt = DateTime.UtcNow;
+                workspace.UpdateAt = DateTime.Now;
 
                 _dataContext.Workspaces.Update(workspace);
+
+                // add activation
+                var activation = new Activation{
+                                            UserId = userId,
+                                            Content = "Create workspace",
+                                            CreateAt = DateTime.Now};
+                activation.Workspace = workspace;
+                await _dataContext.Activations.AddAsync(activation);  
+
                 var save = await SaveChangeAsync();
                 if (save){
+                    // Send workspace to clients
+                    workspaceDto = _mapper.Map<Workspace, WorkspaceDto>(workspace);         
+    	            await _hubService.Clients.Group($"Workspace-{workspaceDto.Id}").SendWorkspaceAsync(workspaceDto);
+
                     return new Response{
                         Message = "Updated workspace successfully",
                         IsSuccess = true
@@ -242,5 +288,91 @@ namespace TaskManager.API.Services.Repository
             return await _dataContext.SaveChangesAsync()>0;
         }
 
+        public async Task<Response> InviteUserToWorkspaceAsync(int workspaceId, string email)
+        {
+            try{
+                var query = @"SELECT Id, Email, FullName FROM aspnetusers WHERE Email= @email AND EmailConfirmed = 1";
+                var user = await _dapperContext.GetFirstAsync<UserDto>(query, new { email });
+                if (user != null){
+                    var url = $"{_configuration["RootUrl"]}api/Workspace/invite/confirmed?workspaceId={workspaceId}&userId={user.Id}";
+
+                    #region html content send email confirmation
+                    var body = "<div style=\"width:100%; height:100vh; background-color: #d0e7fb; display: flex; align-items: center; justify-content: center; margin:auto; box-sizing: border-box;\" >"
+                            + "<div style =\"font-family: 'Lobster', cursive; margin:auto; border-radius: 4px;padding: 40px;min-width: 200px;max-width: 40%; background-color: azure;\" >"
+                            + "<p style=\"margin: 0; padding: 10px 0 ;font-size: 2rem;width: 100%;text-align:left\">Invite workspace</p>"
+                            + "<p style=\"margin: 0;width:100%;padding: 10px 0;text-align: left;color: #7e7b7b;\">Please accept workspace by clicking the link below so you can access to <span style=\"color:#447eb0\" >Task Tracking</span> system account.</p>"
+                            + $"<a href=\"{url}\" style=\" padding: 10px 20px; background-color: #439b73;color: #ffff;text-decoration:none;border-radius: 3px;font-weight:500;display:block; text-align:center; margin-top:10px;margin-bottom:10px;\" >Accept to workspace</a>"
+                            + "</div> </div>";
+                    #endregion
+                    // Send email to the user
+                    var content = new EmailOption{
+                        ToEmail = email,
+                        Subject = "Accept to workspace",
+                        Body = body
+                    };
+
+                    var send = await _webService.SendEmail(content);
+                    return new Response{
+                        Message = "Send email to the user",
+                        IsSuccess = true
+                    };
+                }
+                return new Response{
+                    Message = "Not Found user",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e){
+                Console.WriteLine("InviteUserToWorkspaceAsync: " + e.Message);
+                throw e;
+            }
+        }
+
+        public async Task<Response> ConfirmMemberWorkspaceAsync(int workspaceId, string userId)
+        {
+            try{
+                var query = @"SELECT Id FROM Workspaces WHERE Id=@workspaceId";
+                var workspace = _dapperContext.GetFirstAsync<Workspace>(query, new { workspaceId });
+                if (workspace != null){
+                    var us = new UserWorkspace{
+                        WorkspaceId = workspaceId,
+                        IsOwner = false,
+                        UserId = userId
+                    };
+                    _dataContext.UserWorkspaces.Add(us);
+
+                    // add activation
+                    var activation = new Activation{
+                                                UserId = userId,
+                                                WorkspaceId = workspaceId,
+                                                Content = "Create workspace",
+                                                CreateAt = DateTime.Now};
+                    await _dataContext.Activations.AddAsync(activation); 
+
+                    var isSave = await SaveChangeAsync();
+                    if(isSave){
+                        var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+    	                await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                        
+                        return new Response{
+                            Message = $"{_configuration["RootUrl"]}ConfirmEmail.html",
+                            IsSuccess = true
+                        };
+                    }
+                    return new Response{
+                        Message = $"Not confirmed",
+                        IsSuccess = false
+                    };
+                }
+                return new Response{
+                    Message = "Not Found user",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e){
+                Console.WriteLine("InviteUserToWorkspaceAsync: " + e.Message);
+                throw e;
+            }
+        }
     }
 }

@@ -128,7 +128,7 @@ namespace TaskManager.API.Services.Repository
                         var encodedToken = Encoding.UTF8.GetBytes(confirmToken);
                         var validToken = WebEncoders.Base64UrlEncode(encodedToken);
 
-                        var url = $"https://localhost:7070/account/confirm-email?userId={account.Id}&token={validToken}";
+                        var url = $"{_configuration["RootUrl"]}account/confirm-email?userId={account.Id}&token={validToken}";
 
                         #region html content send email confirmation
                         var body = "<div style=\"width:100%; height:100vh; background-color: #d0e7fb; display: flex; align-items: center; justify-content: center; margin:auto; box-sizing: border-box;\" >"
@@ -146,7 +146,7 @@ namespace TaskManager.API.Services.Repository
                             Body = body
                         };
                         var send = await _webService.SendEmail(email);
-                        Console.WriteLine(send);
+
                         // if(send){
                         //     return new Response{
                         //         Message = "Create Account successfully. Please confirm your account we've just sent your email.",
@@ -266,7 +266,7 @@ namespace TaskManager.API.Services.Repository
                     {
                         return new Response
                         {
-                            Message = "Email confirmed successfully!",
+                            Message = $"{_configuration["RootUrl"]}ConfirmEmail.html",
                             IsSuccess = true
                         };
                     }

@@ -11,7 +11,7 @@ namespace TaskManager.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    // [Authorize]
+    [Authorize]
     public class TaskItemController : ControllerBase
     {
         private readonly ITaskItemRepository _taskItemRepository;
@@ -22,11 +22,14 @@ namespace TaskManager.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateTaskItem(TaskItemDto taskItemDto){
+        public async Task<IActionResult> CreateTaskItem([FromQuery]int WorkspaceId, TaskItemDto taskItemDto){
             try{
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                var rs = await _taskItemRepository.CreateTaskItemAsync(taskItemDto, userId); 
-                return Ok(rs);
+                if(WorkspaceId > 0){
+                    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                    var rs = await _taskItemRepository.CreateTaskItemAsync(WorkspaceId, userId, taskItemDto); 
+                    return Ok(rs);
+                }
+                return BadRequest();
             }
             catch{
                 return BadRequest();
@@ -49,9 +52,10 @@ namespace TaskManager.API.Controllers
         }
 
         [HttpPut("{id}", Name = "UpdateTaskItemById")]
-        public async Task<IActionResult> UpdateTaskItemByUser(TaskItemDto TaskItemDto, int id){
-            try{      
-                var rs = await _taskItemRepository.UpdateTaskItemAsync(TaskItemDto, id); 
+        public async Task<IActionResult> UpdateTaskItemByUser(int id, [FromQuery]int WorkspaceId, TaskItemDto taskItemDto){
+            try{    
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _taskItemRepository.UpdateTaskItemAsync(id, WorkspaceId, userId, taskItemDto); 
                 return Ok(rs);
             }
             catch{
@@ -60,9 +64,10 @@ namespace TaskManager.API.Controllers
         }
 
         [HttpPatch("{id}", Name = "PatchTaskItemById")]
-        public async Task<IActionResult> PatchTaskItemByUser(JsonPatchDocument<TaskItem> patchTaskItem, int id){
-            try{      
-                var rs = await _taskItemRepository.PatchTaskItemAsync(patchTaskItem, id); 
+        public async Task<IActionResult> PatchTaskItemByUser(int id, [FromQuery]int workspaceId, [FromBody] JsonPatchDocument<TaskItem> patchTaskItem){
+            try{    
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _taskItemRepository.PatchTaskItemAsync(id, workspaceId, userId, patchTaskItem); 
                 return Ok(rs);
             }
             catch{
@@ -70,20 +75,33 @@ namespace TaskManager.API.Controllers
             }
         }
 
+        [HttpPost("{id}/MoveTask")]
+        public async Task<IActionResult> MoveTaskItemByUser(int id, [FromQuery]int WorkspaceId,  MoveTaskDto moveTaskDto){
+            try{  
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _taskItemRepository.MoveTaskItemAsync(id, WorkspaceId, userId, moveTaskDto); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
 
         [HttpPost("{id}/upload-file")]
-        public async Task<IActionResult> UploadFile([FromForm] IFormFile file, int id){
+        public async Task<IActionResult> UploadFile(int id, [FromQuery]int WorkspaceId,  [FromForm] IFormFile file){
             if (file!=null){
-                var rs = await _taskItemRepository.UploadFileAsync(id, file);
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _taskItemRepository.UploadFileAsync(id, WorkspaceId, userId, file);
                 return Ok(rs);
             }
             return BadRequest();
         }
 
         [HttpDelete("{id}", Name = "DeleteTaskItemById")]
-        public async Task<IActionResult> DeleteTaskItemByUser(int id){
+        public async Task<IActionResult> DeleteTaskItemByUser(int id, [FromQuery]int WorkspaceId){
             try{
-                var rs = await _taskItemRepository.DeleteTaskItemAsync(id); 
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _taskItemRepository.DeleteTaskItemAsync(id, WorkspaceId, userId); 
                 return Ok(rs);
             }
             catch{

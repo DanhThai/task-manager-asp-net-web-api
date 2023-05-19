@@ -235,12 +235,8 @@ namespace TaskManager.API.Data.Migrations
                     b.Property<DateTime>("CreateAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)");
-
                     b.Property<string>("UserId")
+                        .IsRequired()
                         .HasColumnType("varchar(255)");
 
                     b.Property<int>("WorkspaceId")
@@ -292,6 +288,24 @@ namespace TaskManager.API.Data.Migrations
                     b.ToTable("Cards");
                 });
 
+            modelBuilder.Entity("TaskManager.API.Data.Models.Checklist", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<bool>("Status")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Checklists");
+                });
+
             modelBuilder.Entity("TaskManager.API.Data.Models.Label", b =>
                 {
                     b.Property<int>("Id")
@@ -314,6 +328,62 @@ namespace TaskManager.API.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Labels");
+                });
+
+            modelBuilder.Entity("TaskManager.API.Data.Models.Schedule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Content")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<int>("WorkspaceId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("Schedules");
+                });
+
+            modelBuilder.Entity("TaskManager.API.Data.Models.Subtask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<int>("ChecklistId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<bool>("Status")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChecklistId");
+
+                    b.ToTable("Subtasks");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.TaskItem", b =>
@@ -342,6 +412,12 @@ namespace TaskManager.API.Data.Migrations
 
                     b.Property<byte>("Priority")
                         .HasColumnType("tinyint unsigned");
+
+                    b.Property<int>("SubtaskCompleted")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SubtaskQuantity")
+                        .HasColumnType("int");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -522,7 +598,9 @@ namespace TaskManager.API.Data.Migrations
                 {
                     b.HasOne("TaskManager.API.Data.Models.Account", "User")
                         .WithMany("Activations")
-                        .HasForeignKey("UserId");
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
                         .WithMany("Activations")
@@ -544,6 +622,39 @@ namespace TaskManager.API.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("TaskManager.API.Data.Models.Checklist", b =>
+                {
+                    b.HasOne("TaskManager.API.Data.Models.TaskItem", "TaskItem")
+                        .WithOne("Checklist")
+                        .HasForeignKey("TaskManager.API.Data.Models.Checklist", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TaskItem");
+                });
+
+            modelBuilder.Entity("TaskManager.API.Data.Models.Schedule", b =>
+                {
+                    b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
+                        .WithMany("Schedules")
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("TaskManager.API.Data.Models.Subtask", b =>
+                {
+                    b.HasOne("TaskManager.API.Data.Models.Checklist", "Checklist")
+                        .WithMany("Subtasks")
+                        .HasForeignKey("ChecklistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Checklist");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.TaskItem", b =>
@@ -624,6 +735,11 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("TaskItems");
                 });
 
+            modelBuilder.Entity("TaskManager.API.Data.Models.Checklist", b =>
+                {
+                    b.Navigation("Subtasks");
+                });
+
             modelBuilder.Entity("TaskManager.API.Data.Models.Label", b =>
                 {
                     b.Navigation("TaskLabels");
@@ -631,6 +747,8 @@ namespace TaskManager.API.Data.Migrations
 
             modelBuilder.Entity("TaskManager.API.Data.Models.TaskItem", b =>
                 {
+                    b.Navigation("Checklist");
+
                     b.Navigation("TaskLabels");
 
                     b.Navigation("UserTasks");
@@ -641,6 +759,8 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("Activations");
 
                     b.Navigation("Cards");
+
+                    b.Navigation("Schedules");
 
                     b.Navigation("UserWorkspaces");
                 });

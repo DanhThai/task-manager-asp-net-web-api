@@ -19,25 +19,6 @@ namespace TaskManager.API.Services.Repository
             _configuration = configuration;
         }
 
-        // public async Task<bool> SendEmail(EmailOption emailOption)
-        // {
-        //     RestClient client = new RestClient(_configuration["Mailgun:BaseUri"]);    
-        //     client.Authenticator = new HttpBasicAuthenticator ("api",_configuration["Mailgun:APIKey"]);
-
-        //     RestRequest request = new RestRequest ();
-        //     request.AddParameter ("domain", _configuration["Mailgun:Domain"], ParameterType.UrlSegment);
-        //     request.Resource = "{domain}/messages";
-        //     request.AddParameter ("from", $"{_configuration["Mailgun:SenderName"]} <{_configuration["Mailgun:SenderAddress"]}>");
-        //     // request.AddParameter ("to", emailOption.ToEmail);
-        //     request.AddParameter ("to", "danhthai5343@gmail.com");
-        //     request.AddParameter ("subject", emailOption.Subject);
-        //     request.AddParameter ("html", emailOption.Body);
-        //     request.Method = Method.Post;
-
-        //     var response = await client.ExecuteAsync(request);
-
-        //     return response.IsSuccessful;
-        // }
         public async Task<string> SendEmail(EmailOption emailOption)
         {
             try{

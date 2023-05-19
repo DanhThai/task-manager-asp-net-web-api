@@ -17,6 +17,9 @@ namespace TaskManager.API.Data
         public DbSet<UserTask> UserTasks { get; set; }
         public DbSet<UserWorkspace> UserWorkspaces { get; set; }
         public DbSet<Label> Labels { get; set; }
+        public DbSet<Checklist> Checklists { get; set; }
+        public DbSet<Subtask> Subtasks { get; set; }
+        public DbSet<Schedule> Schedules { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -24,13 +27,13 @@ namespace TaskManager.API.Data
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<Workspace>(
-            u =>{
-                u.HasMany(u => u.Users).WithMany(w => w.Workspaces)
+            w =>{
+                w.HasMany(w => w.Users).WithMany(u => u.Workspaces)
                 .UsingEntity<UserWorkspace>(
                     u => u.HasOne<Account>(e => e.User).WithMany(e => e.UserWorkspaces),
                     w => w.HasOne<Workspace>(e => e.Workspace).WithMany(e => e.UserWorkspaces)
-            );
-
+                );
+                w.HasMany(w => w.Schedules).WithOne(s => s.Workspace).HasForeignKey(s => s.WorkspaceId);
             });
 
             modelBuilder.Entity<Card>(
@@ -59,6 +62,13 @@ namespace TaskManager.API.Data
                 a=>{
                     a.HasOne(a => a.Workspace).WithMany(w=>w.Activations).HasForeignKey(a => a.WorkspaceId);
                     a.HasOne(a => a.User).WithMany(w=>w.Activations).HasForeignKey(a => a.UserId);
+                }
+            );
+
+            modelBuilder.Entity<Checklist>(
+                c=>{
+                    c.HasOne(c => c.TaskItem).WithOne(t=>t.Checklist).HasForeignKey<Checklist>(c => c.Id);
+                    c.HasMany(c => c.Subtasks).WithOne(s=>s.Checklist).HasForeignKey(s => s.ChecklistId);
                 }
             );
 

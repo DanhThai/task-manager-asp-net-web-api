@@ -252,13 +252,11 @@ namespace TaskManager.API.Data.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    Title = table.Column<string>(type: "varchar(50)", maxLength: 50, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
                     Content = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     CreateAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     WorkspaceId = table.Column<int>(type: "int", nullable: false),
-                    UserId = table.Column<string>(type: "varchar(255)", nullable: true)
+                    UserId = table.Column<string>(type: "varchar(255)", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
@@ -268,7 +266,8 @@ namespace TaskManager.API.Data.Migrations
                         name: "FK_Activations_AspNetUsers_UserId",
                         column: x => x.UserId,
                         principalTable: "AspNetUsers",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_Activations_Workspaces_WorkspaceId",
                         column: x => x.WorkspaceId,
@@ -299,6 +298,33 @@ namespace TaskManager.API.Data.Migrations
                     table.PrimaryKey("PK_Cards", x => x.Id);
                     table.ForeignKey(
                         name: "FK_Cards_Workspaces_WorkspaceId",
+                        column: x => x.WorkspaceId,
+                        principalTable: "Workspaces",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "Schedules",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Title = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Content = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Color = table.Column<string>(type: "varchar(20)", maxLength: 20, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Date = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    WorkspaceId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Schedules", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Schedules_Workspaces_WorkspaceId",
                         column: x => x.WorkspaceId,
                         principalTable: "Workspaces",
                         principalColumn: "Id",
@@ -348,6 +374,8 @@ namespace TaskManager.API.Data.Migrations
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     FileName = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
+                    SubtaskQuantity = table.Column<int>(type: "int", nullable: false),
+                    SubtaskCompleted = table.Column<int>(type: "int", nullable: false),
                     Priority = table.Column<byte>(type: "tinyint unsigned", nullable: false),
                     DueDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     CreatAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
@@ -361,6 +389,27 @@ namespace TaskManager.API.Data.Migrations
                         name: "FK_TaskItems_Cards_CardId",
                         column: x => x.CardId,
                         principalTable: "Cards",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "Checklists",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false),
+                    Name = table.Column<string>(type: "varchar(50)", maxLength: 50, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Status = table.Column<bool>(type: "tinyint(1)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Checklists", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Checklists_TaskItems_Id",
+                        column: x => x.Id,
+                        principalTable: "TaskItems",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
@@ -422,6 +471,29 @@ namespace TaskManager.API.Data.Migrations
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
+            migrationBuilder.CreateTable(
+                name: "Subtasks",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Name = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Status = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    ChecklistId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Subtasks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Subtasks_Checklists_ChecklistId",
+                        column: x => x.ChecklistId,
+                        principalTable: "Checklists",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
             migrationBuilder.CreateIndex(
                 name: "IX_Activations_UserId",
                 table: "Activations",
@@ -475,6 +547,16 @@ namespace TaskManager.API.Data.Migrations
                 column: "WorkspaceId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Schedules_WorkspaceId",
+                table: "Schedules",
+                column: "WorkspaceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Subtasks_ChecklistId",
+                table: "Subtasks",
+                column: "ChecklistId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TaskItems_CardId",
                 table: "TaskItems",
                 column: "CardId");
@@ -526,6 +608,12 @@ namespace TaskManager.API.Data.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "Schedules");
+
+            migrationBuilder.DropTable(
+                name: "Subtasks");
+
+            migrationBuilder.DropTable(
                 name: "TaskLabel");
 
             migrationBuilder.DropTable(
@@ -538,13 +626,16 @@ namespace TaskManager.API.Data.Migrations
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
+                name: "Checklists");
+
+            migrationBuilder.DropTable(
                 name: "Labels");
 
             migrationBuilder.DropTable(
-                name: "TaskItems");
+                name: "AspNetUsers");
 
             migrationBuilder.DropTable(
-                name: "AspNetUsers");
+                name: "TaskItems");
 
             migrationBuilder.DropTable(
                 name: "Cards");

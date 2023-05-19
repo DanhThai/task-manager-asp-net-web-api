@@ -2,6 +2,7 @@ using System.Data;
 using AutoMapper;
 using Dapper;
 using Microsoft.AspNetCore.JsonPatch;
+using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json;
 using TaskManager.API.Data;
 using TaskManager.API.Data.DTOs;
@@ -16,22 +17,20 @@ namespace TaskManager.API.Services.Repository
         private readonly IMapper _mapper;
         private readonly DapperContext _dapperContext;
         private readonly IWebService _webService;
+        private IHubContext<HubService, IHubService> _hubService;
 
-
-        public TaskItemRepository(DataContext dataContext, IMapper mapper, DapperContext dapperContext, IWebService webService)
+        public TaskItemRepository(DataContext dataContext, IMapper mapper, DapperContext dapperContext, IWebService webService, IHubContext<HubService, IHubService> hubService)
         {
             _dataContext = dataContext;
             _mapper = mapper;
             _dapperContext = dapperContext;
             _webService = webService;
+            _hubService = hubService;
         }
 
-        public async Task<Response> CreateTaskItemAsync(TaskItemDto taskItemDto, string userId)
+        public async Task<Response> CreateTaskItemAsync(int workspaceId, string userId, TaskItemDto taskItemDto)
         {
             try{
-                taskItemDto.Id = 0;
-                // taskItemDto.LabelId = 1;
-
                 TaskItem taskItem = _mapper.Map<TaskItemDto, TaskItem>(taskItemDto);
                 var a = await _dataContext.TaskItems.AddAsync(taskItem);
 
@@ -42,9 +41,7 @@ namespace TaskManager.API.Services.Repository
                 };
                 userTask.TaskItem = taskItem;
                 await _dataContext.UserTasks.AddAsync(userTask);
-
-                
-                
+            
                 var isSaved = await SaveChangeAsync();
                 if (isSaved){
                     // Update tasks order of card
@@ -59,8 +56,24 @@ namespace TaskManager.API.Services.Repository
 
                     listTaskItem.Add(taskItem.Id);
                     card.TaskOrder = JsonConvert.SerializeObject(listTaskItem);
+                    card.TaskQuantity += 1;
                     _dataContext.Cards.Update(card);
+                    
+                    var activation = new Activation{
+                        UserId = userId,
+                        WorkspaceId = workspaceId,
+                        Content = $"Create task {taskItem.Title} in card {card.Name}",
+                        CreateAt = DateTime.Now
+                    };
+                    await _dataContext.Activations.AddAsync(activation);
+
                     isSaved = await SaveChangeAsync();
+
+                    // Send changed card to client hub
+                    var cardDto = _mapper.Map<Card, CardDto>(card);
+                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+    	            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendCardAsync(cardDto);
+    	            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
 
                     taskItemDto = _mapper.Map<TaskItem, TaskItemDto>(taskItem);
                     return new Response{
@@ -86,12 +99,18 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                var query = @"SELECT Id, Title, Description, Attachment, Priority, DueDate, CardId
+                var query = @"SELECT Id, Title, Description, Attachment, Priority, DueDate, CardId, SubtaskQuantity, SubtaskCompleted
                               FROM TaskItems t WHERE t.Id = @taskItemId;" +
-                              @"SELECT u.Id, u.FullName, u.Email, u.Avatar, ut.Comment, ut.Assigned,  ut.IsCreator
+                            @"SELECT u.Id, u.FullName, u.Email, u.Avatar, ut.Comment, ut.Assigned,  ut.IsCreator
                               FROM aspnetusers u  
                               INNER JOIN UserTasks ut on u.Id = ut.UserId 
-                              WHERE ut.TaskItemId = @taskItemId;";
+                              WHERE ut.TaskItemId = @taskItemId;"+
+                            @"SELECT ID, Name, Status
+                              FROM Checklists c  
+                              WHERE c.Id = @taskItemId;"+
+                            @"SELECT ID, Name, Status
+                              FROM Subtasks  
+                              WHERE ChecklistId = @taskItemId;";
                 var parameters = new DynamicParameters();
                 parameters.Add("taskItemId", taskItemId, DbType.Int32);  
 
@@ -103,16 +122,36 @@ namespace TaskManager.API.Services.Repository
                     if (taskItemDto != null){
                         var users = (await multiResult.ReadAsync<UserTaskDto>()).ToList();
                         foreach (var user in users){
-                            if(user.Assigned)
+                            if(user.Assigned == true){
                                 if(taskItemDto.Assigns == null)
                                     taskItemDto.Assigns = new List<UserTaskDto>();
                                 taskItemDto.Assigns.Add(user);
+                            }
                             
                             if(user.Comment != null)
+                            {
                                 if(taskItemDto.Comments == null)
                                     taskItemDto.Comments = new List<UserTaskDto>();
                                 taskItemDto.Comments.Add(user);
+                            }
                         }
+                        taskItemDto.Checklist = await multiResult.ReadSingleOrDefaultAsync<ChecklistDto>();
+                        if (taskItemDto.Checklist != null)
+                        {
+                            var subtasks = (await multiResult.ReadAsync<SubtaskDto>()).ToList();
+                            taskItemDto.Checklist.Subtasks = subtasks;
+                            // if (taskItemDto.Checklist.Subtasks != null)
+                            // {
+                            //     int subtaskQuantity = subtasks.Count();
+                            //     int taskCompleted = 0;
+                            //     for (int i = 0; i < subtaskQuantity; i++){
+                            //         if( subtasks[i].Status == true)
+                            //             taskCompleted += 1;
+                            //     }                
+                            //     taskItemDto.Checklist.Percentage = (taskCompleted/subtaskQuantity) * 100;
+                            // }
+                        }
+
                     }
                 }
 
@@ -139,7 +178,7 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        public async Task<Response> UpdateTaskItemAsync(TaskItemDto taskItemDto, int taskItemId)
+        public async Task<Response> UpdateTaskItemAsync(int taskItemId, int workspaceId, string userId, TaskItemDto taskItemDto)
         {
             try
             {
@@ -184,13 +223,21 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        public async Task<Response> DeleteTaskItemAsync(int taskItemId)
+        public async Task<Response> DeleteTaskItemAsync(int taskItemId, int workspaceId, string userId)
         {
             try{
-                var query = @"DELETE FROM TaskItems WHERE Id = @taskItemId;";
-                var isDeleted = await _dapperContext.DeleteAsync(query, new {taskItemId});
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == taskItemId);
+                _dataContext.TaskItems.Remove(taskItem);
+                var isDeleted = await SaveChangeAsync();
 
                 if (isDeleted){
+                    var activation = new Activation{
+                        UserId = userId,
+                        WorkspaceId = workspaceId,
+                        Content = $"Remove task {taskItem.Title}",
+                        CreateAt = DateTime.Now
+                    };
+                    await _dataContext.Activations.AddAsync(activation);
                     return new Response{
                         Message = "Deleted task item is succeed",
                         IsSuccess = true
@@ -212,7 +259,7 @@ namespace TaskManager.API.Services.Repository
             return await _dataContext.SaveChangesAsync()>0;
         }
 
-        public async Task<Response> UploadFileAsync(int taskItemId, IFormFile file)
+        public async Task<Response> UploadFileAsync(int taskItemId, int workspaceId, string userId, IFormFile file)
         {
             try{
                 FileStream fs;
@@ -236,13 +283,21 @@ namespace TaskManager.API.Services.Repository
                 var fileUrl = await _webService.UploadFileToFirebase(ms, "Files", file.FileName);
 
                 // Update file to db
-                var queryUpdate = @"UPDATE TaskItems SET Attachment = @attachment WHERE Id = @taskItemId";
-                var parameters = new DynamicParameters();
-                parameters.Add("attachment", fileUrl, DbType.String); 
-                parameters.Add("taskItemId", taskItemId, DbType.Int32);  
-                
-                var isUpdated = await _dapperContext.UpdateAsync(queryUpdate, parameters);
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == taskItemId);
+                taskItem.Attachment = fileUrl;
+                _dataContext.TaskItems.Update(taskItem);
+                var activation = new Activation{
+                    UserId = userId,
+                    WorkspaceId = workspaceId,
+                    Content = $"Upload file {file.FileName} to task {taskItem.Title}",
+                    CreateAt = DateTime.Now
+                };
+                await _dataContext.Activations.AddAsync(activation);
+
+                var isUpdated = await SaveChangeAsync();
+
                 if(isUpdated){
+                   
                     return new Response{
                         Message = "Upload file is succeed",
                         Data = new Dictionary<string, object>{
@@ -263,23 +318,143 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        public async Task<Response> PatchTaskItemAsync(JsonPatchDocument<TaskItem> patchTaskItem, int taskItemId)
+        public async Task<Response> PatchTaskItemAsync(int taskItemId, int workspaceId, string userId, JsonPatchDocument<TaskItem> patchTaskItem)
         {
-            var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == taskItemId);
-            patchTaskItem.ApplyTo(taskItem);
+            try{
 
-            _dataContext.TaskItems.Update(taskItem);
-            var isUpdated = await SaveChangeAsync();
-            if (isUpdated){
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == taskItemId);
+                patchTaskItem.ApplyTo(taskItem);
+
+                _dataContext.TaskItems.Update(taskItem);
+
+                var activation = new Activation{
+                    UserId = userId,
+                    WorkspaceId = workspaceId,
+                    Content = $"Edit task {taskItem.Title}",
+                    CreateAt = DateTime.Now
+                };
+                await _dataContext.Activations.AddAsync(activation);
+
+                var isUpdated = await SaveChangeAsync();
+                if (isUpdated){
+                    return new Response{
+                        Message = "Updated file is succeed",
+                        IsSuccess = true
+                    };
+                }
                 return new Response{
-                    Message = "Updated file is succeed",
-                    IsSuccess = true
+                    Message = "Updated file is failed",
+                    IsSuccess = false
                 };
             }
-            return new Response{
-                Message = "Updated file is failed",
-                IsSuccess = false
-            };
+            catch (Exception e){
+                Console.WriteLine("PatchTaskItemAsync: " + e.Message);
+                throw e;
+            }
+        }
+
+        public async Task<Response> MoveTaskItemAsync(int taskItemId, int workspaceId, string userId, MoveTaskDto moveTaskDto)
+        {
+            try{           
+                var after = moveTaskDto.After;
+                var before = moveTaskDto.Before;
+                Card cardAfter = null;
+                bool isUpdated = false;
+                Activation activation = null;
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == taskItemId);
+                // If task move to another card
+                if(after["cardId"] != before["cardId"])
+                {
+                    taskItem.CardId = after["cardId"];
+                    _dataContext.TaskItems.Update(taskItem);
+
+                    // Remove index of task item from card before
+                    var cardBefore = _dataContext.Cards.FirstOrDefault(c => c.Id == before["cardId"]);
+                    if(cardBefore.TaskOrder.Length <= 3)
+                        cardBefore.TaskOrder = "";
+                    else{
+                        var check = cardBefore.TaskOrder.Contains($"{taskItemId},");
+                        cardBefore.TaskOrder = check?cardBefore.TaskOrder.Replace($"{taskItemId},",""): 
+                                                    cardBefore.TaskOrder.Replace($",{taskItemId}","");
+                    }
+
+                    // Add index of task item from card after                    
+                    cardAfter = _dataContext.Cards.FirstOrDefault(c => c.Id == after["cardId"]);
+                    cardAfter.TaskOrder = InsertItemByIndex(cardAfter.TaskOrder, taskItemId, after["index"]);
+
+                    _dataContext.Cards.UpdateRange(cardBefore, cardAfter);
+                    
+                    activation = new Activation{
+                        UserId = userId,
+                        WorkspaceId = workspaceId,
+                        Content = $"Move task {taskItem.Title} from card {cardBefore.Name} to card {cardAfter.Name}",
+                        CreateAt = DateTime.Now
+                    };
+                    await _dataContext.Activations.AddAsync(activation);
+
+                    isUpdated = await SaveChangeAsync();
+                    if (isUpdated){
+                        return new Response{
+                            Message = "Updated task is succeed",
+                            Data = new Dictionary<string,object>{
+                                ["taskItem"] = _mapper.Map<TaskItem, TaskItemDto>(taskItem),
+                            },
+                            IsSuccess = true
+                        };              
+                    }
+                    return new Response{
+                        Message = "Updated task is failed",                
+                        IsSuccess = false
+                    }; 
+                }
+                cardAfter = _dataContext.Cards.FirstOrDefault(c => c.Id == after["cardId"]);
+                cardAfter.TaskOrder = InsertItemByIndex(cardAfter.TaskOrder, taskItemId, after["index"], before["index"]);
+
+                _dataContext.Cards.Update(cardAfter);
+
+                activation = new Activation{
+                    UserId = userId,
+                    WorkspaceId = workspaceId,
+                    Content = $"Move task {taskItem.Title} in card {cardAfter.Name}",
+                    CreateAt = DateTime.Now
+                };
+                await _dataContext.Activations.AddAsync(activation);
+
+                isUpdated = await SaveChangeAsync();
+                if (isUpdated){
+                    return new Response{
+                        Message = "Updated task is succeed",
+                        Data = new Dictionary<string,object>{
+                            ["taskItem"] = _mapper.Map<TaskItem, TaskItemDto>(taskItem),
+                        },
+                        IsSuccess = true
+                    };              
+                }
+                return new Response{
+                    Message = "Updated task is failed",                
+                    IsSuccess = false
+                }; 
+            }
+            catch(Exception e){
+                Console.WriteLine("MoveTaskItemAsync: " + e.Message);
+                throw e;
+            }
+        }
+
+        private string InsertItemByIndex(string indexes,int item ,int newIndex,int oldIndex = -1){
+            List<int> listIndex = null;
+            if (indexes == ""){
+                listIndex = new List<int>();
+            }
+            else{
+                listIndex = JsonConvert.DeserializeObject<List<int>>(indexes);
+            }
+            if(oldIndex != -1)
+                listIndex.RemoveAt(oldIndex);
+
+            listIndex.Insert(newIndex, item);
+            string rs = JsonConvert.SerializeObject(listIndex);
+            return rs;
         }
     }
 }

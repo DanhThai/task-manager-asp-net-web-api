@@ -9,11 +9,12 @@ namespace TaskManager.API.Services.IRepository
     public interface ITaskItemRepository
     {
         public Task<Response> GetTaskItemByIdAsync(int taskItemId);
-        public Task<Response> CreateTaskItemAsync(TaskItemDto taskItemDto, string userId);
-        public Task<Response> UpdateTaskItemAsync(TaskItemDto taskItemDto, int taskItemId);
-        public Task<Response> PatchTaskItemAsync(JsonPatchDocument<TaskItem> patchTaskItem, int taskItemId);
-        public Task<Response> UploadFileAsync(int taskItemId, IFormFile file);
-        public Task<Response> DeleteTaskItemAsync(int taskItemId);
+        public Task<Response> CreateTaskItemAsync(int WorkspaceId, string userId, TaskItemDto taskItemDto);
+        public Task<Response> UpdateTaskItemAsync(int taskItemId, int WorkspaceId, string userId, TaskItemDto taskItemDto);
+        public Task<Response> MoveTaskItemAsync(int taskItemId, int WorkspaceId, string userId, MoveTaskDto moveTaskDto);
+        public Task<Response> PatchTaskItemAsync(int taskItemId, int WorkspaceId, string userId, JsonPatchDocument<TaskItem> patchTaskItem);
+        public Task<Response> UploadFileAsync(int taskItemId, int WorkspaceId, string userId, IFormFile file);
+        public Task<Response> DeleteTaskItemAsync(int taskItemId, int WorkspaceId, string userId);
         public Task<bool> SaveChangeAsync();
     }
 }

@@ -26,5 +26,6 @@ namespace TaskManager.API.Data.Models
         public ICollection<UserWorkspace> UserWorkspaces { get; set; } = null;
         public ICollection<Account> Users { get; set; }= null;
         public ICollection<Activation> Activations { get; set; }= null;
+        public ICollection<Schedule> Schedules { get; set; }= null;
     }
 }

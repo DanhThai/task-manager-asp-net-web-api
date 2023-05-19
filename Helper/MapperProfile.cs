@@ -12,7 +12,13 @@ namespace TaskManager.API.Helper
             CreateMap<UserDto, Account>().ReverseMap();
             CreateMap<WorkspaceDto, Workspace>().ReverseMap();
             CreateMap<TaskItemDto, TaskItem>().ReverseMap();
+            CreateMap<ActivationDto, Activation>().ReverseMap();
+            CreateMap<ChecklistDto, Checklist>().ReverseMap();
+            CreateMap<SubtaskDto, Subtask>().ReverseMap();
+            CreateMap<Schedule, ScheduleDto>().ReverseMap();
 
+            CreateMap<Card, CardDto>().ForMember(dest => dest.ListTaskIdOrder, 
+                        op => op.MapFrom(src => src.TaskOrder.ConvertStringToList()));
         }
     }
 }

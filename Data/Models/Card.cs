@@ -23,6 +23,7 @@ namespace TaskManager.API.Data.Models
         public DateTime? UpdateAt { get; set; }
 
         // Relationship
+        [Required]
         public int WorkspaceId { get; set; }
         public Workspace Workspace { get; set; }
 

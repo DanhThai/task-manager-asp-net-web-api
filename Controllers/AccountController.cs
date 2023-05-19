@@ -45,7 +45,7 @@ namespace TaskManager.API.Controllers
                 return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");;
             }
             var result = await _accountRepository.ConfirmEmailAsync(userId, token);
-            return RedirectPermanent("https://localhost:7070/ConfirmEmail.html");;
+            return RedirectPermanent(result.Message);;
         }
         
         [HttpPost("upload-avt")]

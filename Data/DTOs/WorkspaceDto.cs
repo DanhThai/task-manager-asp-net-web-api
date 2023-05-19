@@ -6,6 +6,7 @@ namespace TaskManager.API.Data.DTOs
 {
     public class WorkspaceDto
     {
+        [Key]
         public int? Id { get; internal set; }
         [Required, MaxLength(50)]
         public string Title { get; set; }
@@ -14,10 +15,12 @@ namespace TaskManager.API.Data.DTOs
         public string? Background { get; internal set; }
         [Required]
         public int Permission { get; set; }
-        public bool? IsOwner { get; internal set;}
+        public bool? IsOwner { get; internal set;} = false;
         public string CreatorId { get; internal set;}
         public string CreatorName { get; internal set;}
         public List<UserDto> Members {get; internal set;} = new List<UserDto>();
         public List<CardDto> Cards {get; internal set;} = new List<CardDto>();
+        public List<ActivationDto> Activations {get; internal set;} = new List<ActivationDto>();
+        public List<ScheduleDto> Schedules {get; internal set;} = new List<ScheduleDto>();
     }
 }

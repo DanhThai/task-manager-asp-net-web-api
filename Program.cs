@@ -35,11 +35,11 @@ services.AddDbContext<DataContext>(
 #endregion
 
 // Add Identity User
-builder.Services.AddIdentity<Account, IdentityRole>()
+services.AddIdentity<Account, IdentityRole>()
     .AddEntityFrameworkStores<DataContext>()
     .AddDefaultTokenProviders();
 //  Config password
-builder.Services.Configure<IdentityOptions>(options =>
+services.Configure<IdentityOptions>(options =>
 {
     // Default Password settings.
     options.Password.RequireDigit = false;
@@ -54,7 +54,7 @@ builder.Services.Configure<IdentityOptions>(options =>
 });
 
 // Adding Authentication
-builder.Services.AddAuthentication(options =>{
+services.AddAuthentication(options =>{
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -82,12 +82,14 @@ services.AddHttpContextAccessor();
 services.AddScoped<IAccountRepository,AccountRepository>();
 services.AddScoped<IWorkspaceRepository,WorkspaceRepository>();
 services.AddScoped<ITaskItemRepository,TaskItemRepository>();
+services.AddScoped<IChecklistRepository,ChecklistRepository>();
+services.AddScoped<ISubtaskRepository,SubtaskRepository>();
 services.AddTransient<IWebService,WebService>();
 services.AddSingleton<DapperContext>();
 
 // Add mapper
 services.AddAutoMapper(typeof(MapperProfile).Assembly);
-
+services.AddSignalR();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -104,9 +106,11 @@ app.UseCors("MyCors");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHub<HubService>("/HubService");
 
 app.UseStaticFiles();
 
 app.MapControllers();
+
 
 app.Run();
