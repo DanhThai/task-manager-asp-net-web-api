@@ -22,10 +22,12 @@ namespace TaskManager.API.Data.Models
         public DateTime? CreateAt { get; set; }
         public DateTime? UpdateAt { get; set; }
 
-        public ICollection<Card> Cards { get; set; } = null;
-        public ICollection<UserWorkspace> UserWorkspaces { get; set; } = null;
+        public ICollection<Card> Cards { get; set; }
+        public ICollection<MemberWorkspace> MemberWorkspaces { get; set; }
         public ICollection<Account> Users { get; set; }= null;
         public ICollection<Activation> Activations { get; set; }= null;
         public ICollection<Schedule> Schedules { get; set; }= null;
+        public ICollection<Label> Labels { get; set; }= null;
+
     }
 }

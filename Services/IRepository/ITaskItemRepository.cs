@@ -15,6 +15,22 @@ namespace TaskManager.API.Services.IRepository
         public Task<Response> PatchTaskItemAsync(int taskItemId, int WorkspaceId, string userId, JsonPatchDocument<TaskItem> patchTaskItem);
         public Task<Response> UploadFileAsync(int taskItemId, int WorkspaceId, string userId, IFormFile file);
         public Task<Response> DeleteTaskItemAsync(int taskItemId, int WorkspaceId, string userId);
+
+        public Task<Response> GetTasksItemByMemberAsync(string memberId);
+        public Task<Response> SortingTasksItemByMemberAsync(string memberId);
+        public Task<Response> FilteringTasksItemByMemberAsync(string memberId);
+        public Task<Response> AssignMemberAsync(int taskItemId, int workspaceId, string userId, List<MemberTaskDto> memberTaskDto);
+        public Task<Response> ExtendDueDateMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
+        public Task<Response> ConfirmExtendMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
+        // public Task<Response> RemoveMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
+
+        public Task<Response> CreateCommentAsync(int workspaceId, string userId, CommentDto commentDto);
+        public Task<Response> EditCommentAsync(int workspaceId, string userId, CommentDto commentDto);
+        public Task<Response> DeleteCommentAsync(int taskItemId, int workspaceId, string userId, int userTaskId);
+
+        public Task<Response> AddLabelToTaskItemAsync(int workspaceId, string userId, List<LabelDto> labelDto);
+
+
         public Task<bool> SaveChangeAsync();
     }
 }

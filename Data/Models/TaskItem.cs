@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace TaskManager.API.Data.Models
 {
-    public enum PriorityEnum: byte
+    public enum PRIORITY_ENUM
     {
         Low = 0,
         Medium = 1,
@@ -18,10 +18,12 @@ namespace TaskManager.API.Data.Models
         public string? Description { get; set; }
         public string? Attachment { get; set; }
         public string? FileName { get; set; }
+        public int CommentQuantity { get; set; } = 0;
         public int SubtaskQuantity { get; set; } = 0;
         public int SubtaskCompleted { get; set; } = 0;
+        public bool IsComplete { get; set; } = false;
         [Required]
-        public PriorityEnum Priority { get; set; }
+        public PRIORITY_ENUM Priority { get; set; }
         // public DateTime? StartDate { get; set; }
         public DateTime? DueDate { get; set; }
         public DateTime? CreatAt { get; set; }
@@ -30,12 +32,15 @@ namespace TaskManager.API.Data.Models
         // Relationship
         public int CardId { get; set; }
         public Card Card { get; set; }
-        public Checklist? Checklist { get; set; }
+        public string CreatorId { get; set; }
+        public Account Creator { get; set; }
 
-        public ICollection<UserTask> UserTasks { get; set; }= null;
-        public ICollection<Account> Users { get; set; }= null;
+        public ICollection<MemberTask> MemberTasks { get; set; }= null;
+        // public ICollection<Account> Users { get; set; }= null;
         public ICollection<TaskLabel> TaskLabels { get; set; }= null;
         public ICollection<Label> Labels { get; set; }= null;
+        public ICollection<Subtask> Subtasks { get; set; }= null;
+        public ICollection<Comment> Comments { get; set; } = null;
       
     }
 }

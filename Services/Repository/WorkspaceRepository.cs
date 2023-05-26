@@ -45,17 +45,17 @@ namespace TaskManager.API.Services.Repository
                 workspace.CreatorId = userId;
                 workspace.CreatorName = userName;
                 workspace.Cards = new List<Card>{
-                    new Card("Todos", 0),
-                    new Card("In Progress", 1),
-                    new Card("Completed", 2),
+                    new Card("Todos", CARD_CODE_ENUM.Todos),
+                    new Card("In Progress", CARD_CODE_ENUM.InProgress),
+                    new Card("Completed", CARD_CODE_ENUM.Completed),
                 };
                 var wsCreated = await _dataContext.Workspaces.AddAsync(workspace);
 
-                UserWorkspace userWorkspace = new UserWorkspace{
+                MemberWorkspace userWorkspace = new MemberWorkspace{
                                                     UserId = userId,
-                                                    IsOwner = true};
+                                                    Role = 0};
                 userWorkspace.Workspace = workspace;
-                await _dataContext.UserWorkspaces.AddAsync(userWorkspace); 
+                await _dataContext.MemberWorkspaces.AddAsync(userWorkspace); 
 
                 var activation = new Activation{
                                             UserId = userId,
@@ -93,10 +93,10 @@ namespace TaskManager.API.Services.Repository
                 var currentDay = DateTime.Now.AddDays(-10);
                 var query = @"SELECT Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName 
                               FROM Workspaces w WHERE w.Id = @WorkspaceId;" +
-                            @"SELECT u.Id, u.FullName, u.Email, u.Avatar
-                              FROM aspnetusers u  
-                              INNER JOIN UserWorkspaces uw on u.Id = uw.UserId 
-                              WHERE uw.WorkspaceId = @WorkspaceId;"+
+                            @"SELECT u.Id, u.FullName, u.Email, u.Avatar, mw.Role
+                              FROM aspnetusers u
+                              INNER JOIN MemberWorkspaces mw on u.Id = mw.UserId 
+                              WHERE mw.WorkspaceId = @WorkspaceId;"+
                             @"SELECT Content, CreateAt, UserId, Avatar, FullName
                               FROM Activations a
                               INNER JOIN aspnetusers u on u.Id = a.UserId 
@@ -116,7 +116,29 @@ namespace TaskManager.API.Services.Repository
                 {
                     workspaceDto = await multiResult.ReadSingleOrDefaultAsync<WorkspaceDto>();
                     if (workspaceDto != null){
-                        workspaceDto.Members = (await multiResult.ReadAsync<UserDto>()).ToList();
+                        workspaceDto.Members = (await multiResult.ReadAsync<MemberWorkspaceDto>()).ToList();
+                        if(workspaceDto.Members != null){
+
+                            // Check member has been workspae
+                            var isMember = false;
+                            foreach (var member in workspaceDto.Members){
+                                if (member.Id == userId)
+                                    isMember = true;
+                            }
+
+                            if(!isMember && workspaceDto.Permission == 1)
+                                return new Response{
+                                    Message = "You don't have permission to get workspace",
+                                    IsSuccess = false
+                                };
+
+                            // Move user to the first of list
+                            var index = workspaceDto.Members.FindIndex(x => x.Id == userId);
+                            var temp = workspaceDto.Members[0];
+                            workspaceDto.Members[0] = workspaceDto.Members[index];
+                            workspaceDto.Members[index] = temp;
+                        }
+
                         workspaceDto.Activations = (await multiResult.ReadAsync<ActivationDto>()).ToList();
                         workspaceDto.Schedules = (await multiResult.ReadAsync<ScheduleDto>()).ToList();
                     }
@@ -129,8 +151,8 @@ namespace TaskManager.API.Services.Repository
                 }
 
                 // Get list Card and Task Item
-                query = @"SELECT c.Id, c.Name, c.Code, c.TaskOrder,
-                                 t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.SubtaskQuantity, t.SubtaskCompleted
+                query = @"SELECT c.Id, c.Name, c.Code, c.TaskOrder, c.TaskQuantity,
+                                 t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
                           FROM Cards c  
                           LEFT JOIN TaskItems t on c.Id = t.CardId 
                           WHERE c.WorkspaceId = @WorkspaceId;";
@@ -288,13 +310,13 @@ namespace TaskManager.API.Services.Repository
             return await _dataContext.SaveChangesAsync()>0;
         }
 
-        public async Task<Response> InviteUserToWorkspaceAsync(int workspaceId, string email)
+        #region Member in workspace
+        public async Task<Response> InviteMemberToWorkspaceAsync(int workspaceId, MemberWorkspaceDto member)
         {
             try{
-                var query = @"SELECT Id, Email, FullName FROM aspnetusers WHERE Email= @email AND EmailConfirmed = 1";
-                var user = await _dapperContext.GetFirstAsync<UserDto>(query, new { email });
+                var user = _dataContext.Users.FirstOrDefault(u => u.Email == member.Email);
                 if (user != null){
-                    var url = $"{_configuration["RootUrl"]}api/Workspace/invite/confirmed?workspaceId={workspaceId}&userId={user.Id}";
+                    var url = $"{_configuration["RootUrl"]}api/Workspace/Invite/Confirmed?workspaceId={workspaceId}&userId={user.Id}&role={member.Role}";
 
                     #region html content send email confirmation
                     var body = "<div style=\"width:100%; height:100vh; background-color: #d0e7fb; display: flex; align-items: center; justify-content: center; margin:auto; box-sizing: border-box;\" >"
@@ -306,7 +328,7 @@ namespace TaskManager.API.Services.Repository
                     #endregion
                     // Send email to the user
                     var content = new EmailOption{
-                        ToEmail = email,
+                        ToEmail = member.Email,
                         Subject = "Accept to workspace",
                         Body = body
                     };
@@ -327,25 +349,24 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
-
-        public async Task<Response> ConfirmMemberWorkspaceAsync(int workspaceId, string userId)
+        public async Task<Response> ConfirmMemberWorkspaceAsync(int workspaceId, string userId, int role)
         {
             try{
                 var query = @"SELECT Id FROM Workspaces WHERE Id=@workspaceId";
                 var workspace = _dapperContext.GetFirstAsync<Workspace>(query, new { workspaceId });
                 if (workspace != null){
-                    var us = new UserWorkspace{
+                    var us = new MemberWorkspace{
                         WorkspaceId = workspaceId,
-                        IsOwner = false,
+                        Role = (ROLE_ENUM) role,
                         UserId = userId
                     };
-                    _dataContext.UserWorkspaces.Add(us);
+                    _dataContext.MemberWorkspaces.Add(us);
 
                     // add activation
                     var activation = new Activation{
                                                 UserId = userId,
                                                 WorkspaceId = workspaceId,
-                                                Content = "Create workspace",
+                                                Content = "Tham gia dự án",
                                                 CreateAt = DateTime.Now};
                     await _dataContext.Activations.AddAsync(activation); 
 
@@ -360,12 +381,166 @@ namespace TaskManager.API.Services.Repository
                         };
                     }
                     return new Response{
-                        Message = $"Not confirmed",
+                        Message = $"{_configuration["RootUrl"]}ConfirmEmailError.html",
                         IsSuccess = false
                     };
                 }
                 return new Response{
-                    Message = "Not Found user",
+                    Message = $"{_configuration["RootUrl"]}ConfirmEmailError.html",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e){
+                Console.WriteLine("ConfirmMemberWorkspaceAsync: " + e.Message);
+                throw e;
+            }
+        }
+        public async Task<Response> GetMembersOfWorkspaceAsync(int workspaceId)
+        {
+            try
+            {
+                var query = @"SELECT u.Id, u.FullName, u.Avatar, u.Email, uw.Role
+                              FROM aspnetusers u 
+                              INNER JOIN MemberWorkspaces uw on uw.UserId = u.Id
+                              WHERE uw.WorkspaceId = @workspaceId";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("workspaceId", workspaceId, DbType.Int32);  
+
+                List<MemberWorkspaceDto> members = await _dapperContext.GetListAsync<MemberWorkspaceDto>(query, parameters);
+
+                return new Response{
+                    Message = "Lấy danh sách thành viên thành công",
+                    Data = new Dictionary<string, object>{
+                        ["Members"] = members
+                    },
+                    IsSuccess = true
+                };
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("GetMemberOfWorkspaceAsync: " + e.Message);
+                throw e;
+            }
+        }
+        public async Task<Response> GetMembersWithTaskItemAsync(int workspaceId, string userId)
+        {
+            try
+            {
+                var query = @"SELECT u.Id
+                              FROM aspnetusers u 
+                              INNER JOIN UserWorkspaces uw on uw.UserId = u.Id
+                              WHERE uw.WorkspaceId = @workspaceId";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("workspaceId", workspaceId, DbType.Int32);  
+                List<string> memberIds = await _dapperContext.GetListAsync<string>(query, parameters);
+                var n = memberIds.Count;
+                if(n >0){
+                    string Ids = "";
+                    for(int i=0; i< n; i++){
+                        Ids += $"'{memberIds[i]}'";
+                        if (i < n -1)
+                            Ids += ",";
+                    }
+
+                    Console.WriteLine(Ids);
+                    query = $@"SELECT u.Id, u.FullName, u.Avatar, u.Email, COUNT(IsComplete) as TaskQuantity, SUM(IsComplete) as CompletedQuantity
+                               FROM aspnetusers u
+                               LEFT JOIN MemberTasks mt on u.Id = mt.UserId
+                               LEFT JOIN TaskItems t on t.Id = mt.TaskItemId
+                               WHERE u.Id in ({Ids})
+                               GROUP BY u.Id";
+
+                    List<MemberWorkspaceDto> members = await _dapperContext.GetListAsync<MemberWorkspaceDto>(query);
+                    // Move user to the first of list
+                    var index = members.FindIndex(x => x.Id == userId);
+                    var temp = members[0];
+                    members[0] = members[index];
+                    members[index] = temp;
+                    
+                    return new Response{
+                        Message = "Lấy danh sách thành viên thành công",
+                        Data = new Dictionary<string, object>{
+                            ["Members"] = members
+                        },
+                        IsSuccess = true
+                    };
+                    
+                }
+                return new Response{
+                    Message = "Không tìm thấy thành viên",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("GetMembersWithTaskItemAsync: " + e.Message);
+                throw e;
+            }
+        }
+        public async Task<Response> GetTasksItemByMemberAsync(string memberId)
+        {
+            try
+            {
+                var query = @"SELECT t.Id, Title, Priority, DueDate, IsComplete, SubtaskQuantity, SubtaskCompleted,
+                                     u.Id as CreatorId, u.FullName, u.Avatar, u.Email
+                              FROM TaskItems t 
+                              INNER JOIN aspnetusers u on u.Id = t.CreatorId
+                              INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
+                              WHERE mt.UserId = @memberId";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("memberId", memberId, DbType.String);  
+
+                List<TaskItemDto> taskItemDtos = await _dapperContext.GetListAsync<TaskItemDto>(query, parameters);
+
+                return new Response{
+                    Message = "Lấy danh sách nhiệm vụ thành công",
+                    Data = new Dictionary<string, object>{
+                        ["TaskItems"] = taskItemDtos
+                    },
+                    IsSuccess = true
+                };
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("GetTasksItemByMemberAsync: " + e.Message);
+                throw e;
+            }
+        }
+        public async Task<Response> LeaveOnWorkspaceAsync(int workspaceId, string userId)
+        {
+            try{
+                var userWorkspace = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (userWorkspace != null){
+                    _dataContext.MemberWorkspaces.Remove(userWorkspace);
+
+                    // add activation
+                    var activation = new Activation{
+                                                UserId = userId,
+                                                WorkspaceId = workspaceId,
+                                                Content = "Rời khỏi dự án",
+                                                CreateAt = DateTime.Now};
+                    await _dataContext.Activations.AddAsync(activation); 
+
+                    var isSave = await SaveChangeAsync();
+                    if(isSave){
+                        var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+    	                await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                        
+                        return new Response{
+                            Message = "Rời khỏi dự án thành công",
+                            IsSuccess = true
+                        };
+                    }
+                    return new Response{
+                        Message = $"Không thể rời dự án",
+                        IsSuccess = false
+                    };
+                }
+                return new Response{
+                    Message = "Bạn không phải là thành viên dự án",
                     IsSuccess = false
                 };
             }
@@ -374,5 +549,62 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
+        public async Task<Response> RemoveMemberToWorkspaceAsync(int workspaceId, string userId, string memberId)
+        {
+            try{
+                var uwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (uwAdmin != null){
+                    if (uwAdmin.Role == ROLE_ENUM.Owner || uwAdmin.Role == ROLE_ENUM.Admin){
+                        var uwMember = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == memberId);
+                        if (uwMember.Role == ROLE_ENUM.Admin && uwAdmin.Role == ROLE_ENUM.Admin)
+                            return new Response{
+                                Message = $"Bạn không có quyền xóa thành viên",
+                                IsSuccess = false
+                            };
+                        
+                        _dataContext.MemberWorkspaces.Remove(uwMember);
+
+                        // add activation
+                        var activation = new Activation{
+                                                    UserId = userId,
+                                                    WorkspaceId = workspaceId,
+                                                    Content = "Đã xóa thành viên khỏi dự án",
+                                                    CreateAt = DateTime.Now};
+                        await _dataContext.Activations.AddAsync(activation); 
+
+                        var isSave = await SaveChangeAsync();
+                        if(isSave){
+                            var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+                            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                            
+                            return new Response{
+                                Message = "Rời khỏi dự án thành công",
+                                IsSuccess = true
+                            };
+                        }
+                        return new Response{
+                            Message = $"Không thể rời dự án",
+                            IsSuccess = false
+                        };
+                    }
+
+                    return new Response{
+                        Message = $"Bạn không có quyền xóa thành viên",
+                        IsSuccess = false
+                    };
+                }
+                return new Response{
+                    Message = "Bạn không phải là thành viên dự án",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e){
+                Console.WriteLine("InviteUserToWorkspaceAsync: " + e.Message);
+                throw e;
+            }
+        }
+        #endregion
+
+
     }
 }

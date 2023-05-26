@@ -26,8 +26,6 @@ namespace TaskManager.API.Controllers
 
         [HttpPost("register")]
         public async Task<IActionResult> RegisterUser(RegisterDto user){
-            var l = new List<int>(){1,2,3, 4, 5, 6, 7, 8, 9, 10, 11};
-            string rs = JsonConvert.SerializeObject(l);
             var result = await _accountRepository.RegisterAsync(user);
             return Ok(result);
         }
@@ -42,7 +40,7 @@ namespace TaskManager.API.Controllers
         [HttpGet("confirm-email")]
         public async Task<RedirectResult> ConfirmEmail(string userId, string token){
             if (userId == null || token == null){
-                return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");;
+                return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");
             }
             var result = await _accountRepository.ConfirmEmailAsync(userId, token);
             return RedirectPermanent(result.Message);;

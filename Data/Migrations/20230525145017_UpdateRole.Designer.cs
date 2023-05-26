@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TaskManager.API.Data;
 
@@ -10,9 +11,10 @@ using TaskManager.API.Data;
 namespace TaskManager.API.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20230525145017_UpdateRole")]
+    partial class UpdateRole
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -331,12 +333,7 @@ namespace TaskManager.API.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("varchar(50)");
 
-                    b.Property<int?>("WorkspaceId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("Labels");
                 });
@@ -366,30 +363,6 @@ namespace TaskManager.API.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("MemberTasks");
-                });
-
-            modelBuilder.Entity("TaskManager.API.Data.Models.MemberWorkspace", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<int>("WorkspaceId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("WorkspaceId");
-
-                    b.ToTable("MemberWorkspaces");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Schedule", b =>
@@ -430,12 +403,6 @@ namespace TaskManager.API.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    b.Property<string>("AssignedMemberId")
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("MemberId")
-                        .HasColumnType("longtext");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -448,8 +415,6 @@ namespace TaskManager.API.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AssignedMemberId");
 
                     b.HasIndex("TaskItemId");
 
@@ -528,6 +493,30 @@ namespace TaskManager.API.Data.Migrations
                     b.HasIndex("TaskItemId");
 
                     b.ToTable("TaskLabel");
+                });
+
+            modelBuilder.Entity("TaskManager.API.Data.Models.UserWorkspace", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("WorkspaceId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("UserWorkspaces");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Workspace", b =>
@@ -668,15 +657,6 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("TaskManager.API.Data.Models.Label", b =>
-                {
-                    b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
-                        .WithMany("Labels")
-                        .HasForeignKey("WorkspaceId");
-
-                    b.Navigation("Workspace");
-                });
-
             modelBuilder.Entity("TaskManager.API.Data.Models.MemberTask", b =>
                 {
                     b.HasOne("TaskManager.API.Data.Models.TaskItem", "TaskItem")
@@ -694,23 +674,6 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("TaskManager.API.Data.Models.MemberWorkspace", b =>
-                {
-                    b.HasOne("TaskManager.API.Data.Models.Account", "User")
-                        .WithMany("MemberWorkspaces")
-                        .HasForeignKey("UserId");
-
-                    b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
-                        .WithMany("MemberWorkspaces")
-                        .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-
-                    b.Navigation("Workspace");
-                });
-
             modelBuilder.Entity("TaskManager.API.Data.Models.Schedule", b =>
                 {
                     b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
@@ -724,17 +687,11 @@ namespace TaskManager.API.Data.Migrations
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Subtask", b =>
                 {
-                    b.HasOne("TaskManager.API.Data.Models.Account", "AssignedMember")
-                        .WithMany("Subtasks")
-                        .HasForeignKey("AssignedMemberId");
-
                     b.HasOne("TaskManager.API.Data.Models.TaskItem", "TaskItem")
                         .WithMany("Subtasks")
                         .HasForeignKey("TaskItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("AssignedMember");
 
                     b.Navigation("TaskItem");
                 });
@@ -775,6 +732,23 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("TaskItem");
                 });
 
+            modelBuilder.Entity("TaskManager.API.Data.Models.UserWorkspace", b =>
+                {
+                    b.HasOne("TaskManager.API.Data.Models.Account", "User")
+                        .WithMany("UserWorkspaces")
+                        .HasForeignKey("UserId");
+
+                    b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
+                        .WithMany("UserWorkspaces")
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("TaskManager.API.Data.Models.Account", b =>
                 {
                     b.Navigation("Activations");
@@ -783,11 +757,9 @@ namespace TaskManager.API.Data.Migrations
 
                     b.Navigation("MemberTasks");
 
-                    b.Navigation("MemberWorkspaces");
-
-                    b.Navigation("Subtasks");
-
                     b.Navigation("TaskItems");
+
+                    b.Navigation("UserWorkspaces");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Card", b =>
@@ -817,11 +789,9 @@ namespace TaskManager.API.Data.Migrations
 
                     b.Navigation("Cards");
 
-                    b.Navigation("Labels");
-
-                    b.Navigation("MemberWorkspaces");
-
                     b.Navigation("Schedules");
+
+                    b.Navigation("UserWorkspaces");
                 });
 #pragma warning restore 612, 618
         }

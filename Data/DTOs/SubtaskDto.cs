@@ -9,8 +9,6 @@ namespace TaskManager.API.Data.DTOs
         public string Name { get; set; }
         public bool? Status { get; set; } = false;
         [Required]
-        public int ChecklistId { get; set; }
-
-
+        public int TaskItemId { get; set; }
     }
 }

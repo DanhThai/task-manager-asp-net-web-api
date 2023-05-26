@@ -108,6 +108,35 @@ namespace TaskManager.API.Controllers
                 return BadRequest();
             }
         }
+        [HttpPost("{id}/AssignMember")]
+        public async Task<IActionResult> AssignMemberToTaskItem(int id, [FromQuery]int workspaceId, [FromBody] List<MemberTaskDto> memberTaskDto){
+            try{
+                if(workspaceId >0){    
+                    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                    var rs = await _taskItemRepository.AssignMemberAsync(id, workspaceId, userId, memberTaskDto); 
+                    return Ok(rs);
+                }
+                return BadRequest();
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        // [HttpPost("RemoveMember")]
+        // public async Task<IActionResult> RemoveMemberToTaskItem([FromQuery]int workspaceId, [FromBody] MemberTaskDto memberTaskDto){
+        //     try{
+        //         if(workspaceId >0){    
+        //             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+        //             var rs = await _taskItemRepository.RemoveMemberAsync(workspaceId, userId, memberTaskDto); 
+        //             return Ok(rs);
+        //         }
+        //         return BadRequest();
+        //     }
+        //     catch{
+        //         return BadRequest();
+        //     }
+        // }
 
     }
 }

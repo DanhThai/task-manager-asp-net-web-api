@@ -25,7 +25,7 @@ namespace TaskManager.API.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateSubtask([FromQuery]int WorkspaceId, SubtaskDto subtaskDto){
             try{
-                if(WorkspaceId > 0 && subtaskDto.ChecklistId > 0){
+                if(WorkspaceId > 0 && subtaskDto.TaskItemId > 0){
                     var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
                     var rs = await _subtaskRepository.CreateSubtaskAsync(WorkspaceId, userId, subtaskDto); 
                     return Ok(rs);

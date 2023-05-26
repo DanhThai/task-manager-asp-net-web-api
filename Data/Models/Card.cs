@@ -3,9 +3,15 @@ using Newtonsoft.Json;
 
 namespace TaskManager.API.Data.Models
 {
+    public enum CARD_CODE_ENUM{
+        Todos = 0,
+        InProgress = 1,
+        Completed = 2,
+    }
     public class Card
     {
-        public Card(string name, int code)
+
+        public Card(string name, CARD_CODE_ENUM code)
         {
             Name = name;
             Code = code;
@@ -15,12 +21,10 @@ namespace TaskManager.API.Data.Models
         public int Id { get; set; }
         [Required, MaxLength(50)]
         public string Name { get; set; }
-        public int Code { get; set; }
+        public CARD_CODE_ENUM Code { get; set; }
         public int TaskQuantity { get; set;} = 0;
         [MaxLength(256)]
         public string TaskOrder { get; set; } = "";
-        public DateTime? CreateAt { get; set; }
-        public DateTime? UpdateAt { get; set; }
 
         // Relationship
         [Required]

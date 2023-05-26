@@ -9,8 +9,10 @@ namespace TaskManager.API.Data.Models
         [Required, MaxLength(100)]
         public string Name { get; set; }
         public bool Status { get; set; } = false;
-        public int ChecklistId { get; set; }
-        public Checklist Checklist { get; set; }
+        public int TaskItemId { get; set; }
+        public TaskItem TaskItem { get; set; }
+        public string? MemberId{ get; set; }
+        public Account? AssignedMember { get; set; }
 
     }
 }

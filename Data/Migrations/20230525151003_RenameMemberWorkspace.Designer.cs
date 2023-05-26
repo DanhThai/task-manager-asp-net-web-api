@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TaskManager.API.Data;
 
@@ -10,9 +11,10 @@ using TaskManager.API.Data;
 namespace TaskManager.API.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20230525151003_RenameMemberWorkspace")]
+    partial class RenameMemberWorkspace
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -331,12 +333,7 @@ namespace TaskManager.API.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("varchar(50)");
 
-                    b.Property<int?>("WorkspaceId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("Labels");
                 });
@@ -430,12 +427,6 @@ namespace TaskManager.API.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    b.Property<string>("AssignedMemberId")
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("MemberId")
-                        .HasColumnType("longtext");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -448,8 +439,6 @@ namespace TaskManager.API.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AssignedMemberId");
 
                     b.HasIndex("TaskItemId");
 
@@ -668,15 +657,6 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("TaskManager.API.Data.Models.Label", b =>
-                {
-                    b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
-                        .WithMany("Labels")
-                        .HasForeignKey("WorkspaceId");
-
-                    b.Navigation("Workspace");
-                });
-
             modelBuilder.Entity("TaskManager.API.Data.Models.MemberTask", b =>
                 {
                     b.HasOne("TaskManager.API.Data.Models.TaskItem", "TaskItem")
@@ -724,17 +704,11 @@ namespace TaskManager.API.Data.Migrations
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Subtask", b =>
                 {
-                    b.HasOne("TaskManager.API.Data.Models.Account", "AssignedMember")
-                        .WithMany("Subtasks")
-                        .HasForeignKey("AssignedMemberId");
-
                     b.HasOne("TaskManager.API.Data.Models.TaskItem", "TaskItem")
                         .WithMany("Subtasks")
                         .HasForeignKey("TaskItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("AssignedMember");
 
                     b.Navigation("TaskItem");
                 });
@@ -785,8 +759,6 @@ namespace TaskManager.API.Data.Migrations
 
                     b.Navigation("MemberWorkspaces");
 
-                    b.Navigation("Subtasks");
-
                     b.Navigation("TaskItems");
                 });
 
@@ -816,8 +788,6 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("Activations");
 
                     b.Navigation("Cards");
-
-                    b.Navigation("Labels");
 
                     b.Navigation("MemberWorkspaces");
 

@@ -15,10 +15,13 @@ namespace TaskManager.API.Data.Models
         public string? ImageName { get; set; } = null;
 
         //  Relationships
-        public ICollection<UserWorkspace> UserWorkspaces { get; set; } = null;
+        public ICollection<MemberWorkspace> MemberWorkspaces { get; set; } = null;
         public ICollection<Workspace> Workspaces { get; set;} = null;
-        public ICollection<UserTask> UserTasks { get; set;} = null;
-        public ICollection<TaskItem> TaskItems { get;  } = null;
-        public ICollection<Activation> Activations { get;  } = null;
+        public ICollection<MemberTask> MemberTasks { get; set;} = null;
+        public ICollection<TaskItem> TaskItems { get; set; } = null;
+        public ICollection<Activation> Activations { get; set; } = null;
+        public ICollection<Comment> Comments { get; set; } = null;
+        public ICollection<Subtask> Subtasks { get; set; } = null;
+
     }
 }

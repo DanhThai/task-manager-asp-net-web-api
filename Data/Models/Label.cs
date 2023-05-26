@@ -15,6 +15,8 @@ namespace TaskManager.API.Data.Models
         [Required, MaxLength(30)]
         public string Color { get; set; }
         public DateTime? CreateAt { get; set; }
+        public int? WorkspaceId { get; set; }
+        public Workspace? Workspace { get; set; }
 
         public ICollection<TaskItem> TaskItems { get; set; } = null;
         public ICollection<TaskLabel> TaskLabels { get; set; } = null;

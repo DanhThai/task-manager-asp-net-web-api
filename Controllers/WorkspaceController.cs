@@ -22,12 +22,6 @@ namespace TaskManager.API.Controllers
             _workspaceRepository = workspaceRepository;
         }
 
-        // var l = new List<int>(){1,2,3, 4, 5, 6, 7, 8, 9, 10, 11};
-        // string rs = JsonConvert.SerializeObject(l);
-        // var s = JsonConvert.DeserializeObject<List<int>>(rs);
-        // Console.WriteLine(s);
-
-
         [HttpPost]
         public async Task<IActionResult> CreateWorkspace(WorkspaceDto workspaceDto){
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -35,32 +29,6 @@ namespace TaskManager.API.Controllers
 
             var rs = await _workspaceRepository.CreateWorkspaceAsync(workspaceDto, userId, userName); 
             return Ok(rs);
-        }
-
-        [HttpPost("{id}/invite")]
-        public async Task<IActionResult> InviteUserToWorkspace(int id, string email){
-            try{
-                var rs = await _workspaceRepository.InviteUserToWorkspaceAsync(id, email); 
-                return Ok(rs);
-            }
-            catch{
-                return BadRequest();
-            }
-        }
-
-        [HttpGet("invite/confirmed")]
-        public async Task<RedirectResult> ConfirmMemberWorkspace(int workspaceId, string userId){
-            try{
-                var rs = await _workspaceRepository.ConfirmMemberWorkspaceAsync(workspaceId, userId);
-                if(rs.IsSuccess) 
-                    return RedirectPermanent(rs.Message);
-                else
-                    return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");;
-            }
-            catch{
-                return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");;
-
-            }
         }
 
         [HttpGet("{id}", Name = "WorkspaceById")]
@@ -89,8 +57,7 @@ namespace TaskManager.API.Controllers
             catch{
                 return BadRequest();
             }
-        }
-
+        }    
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateWorkspaceByUser(WorkspaceDto workspaceDto,int id){
@@ -117,5 +84,93 @@ namespace TaskManager.API.Controllers
                 return BadRequest();
             }
         }
+
+        #region Member
+        [HttpPost("{id}/Invite")]
+        public async Task<IActionResult> InviteUserToWorkspace(int id, MemberWorkspaceDto member){
+            try{
+                var rs = await _workspaceRepository.InviteMemberToWorkspaceAsync(id, member); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpGet("Invite/Confirmed")]
+        public async Task<RedirectResult> ConfirmMemberWorkspace(int workspaceId, string userId, int role){
+            try{
+                if(workspaceId >0 && userId != null && role > 0){
+                    var rs = await _workspaceRepository.ConfirmMemberWorkspaceAsync(workspaceId, userId, role);
+                    return RedirectPermanent(rs.Message);
+                }
+                return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");
+            }
+            catch{
+                return RedirectPermanent("https://localhost:7070/ConfirmEmailError.html");;
+
+            }
+        }
+
+        [HttpGet("{id}/Members")]
+        public async Task<IActionResult> GetMembersById(int id){
+            try{
+                var rs = await _workspaceRepository.GetMembersOfWorkspaceAsync(id); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpGet("{id}/MembersWithTasks")]
+        public async Task<IActionResult> GetMembersWithTaskItemById(int id){
+            try{
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _workspaceRepository.GetMembersWithTaskItemAsync(id, userId); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpGet("Member/{memberId}/TaskItems")]
+        public async Task<IActionResult> GetTaskItemByMember(string memberId){
+            try{
+                var rs = await _workspaceRepository.GetTasksItemByMemberAsync(memberId); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+        [HttpPost("{id}/LeaveWorkspace")]
+        public async Task<IActionResult> LeaveOnWorkspace(int id){
+            try{
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _workspaceRepository.LeaveOnWorkspaceAsync(id, userId); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpPost("{id}/RemoveMember")]
+        public async Task<IActionResult> RemoveMemberToWorkspace(int id, string memberId){
+            try{
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                if(userId == memberId)
+                    return BadRequest();
+                var rs = await _workspaceRepository.RemoveMemberToWorkspaceAsync(id, userId, memberId); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+        #endregion
+
     }
 }

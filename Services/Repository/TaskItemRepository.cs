@@ -32,15 +32,8 @@ namespace TaskManager.API.Services.Repository
         {
             try{
                 TaskItem taskItem = _mapper.Map<TaskItemDto, TaskItem>(taskItemDto);
+                taskItem.CreatorId = userId;
                 var a = await _dataContext.TaskItems.AddAsync(taskItem);
-
-                // Add user created task item
-                UserTask userTask = new UserTask(){
-                    IsCreator = true,
-                    UserId = userId
-                };
-                userTask.TaskItem = taskItem;
-                await _dataContext.UserTasks.AddAsync(userTask);
             
                 var isSaved = await SaveChangeAsync();
                 if (isSaved){
@@ -99,18 +92,23 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                var query = @"SELECT Id, Title, Description, Attachment, Priority, DueDate, CardId, SubtaskQuantity, SubtaskCompleted
-                              FROM TaskItems t WHERE t.Id = @taskItemId;" +
-                            @"SELECT u.Id, u.FullName, u.Email, u.Avatar, ut.Comment, ut.Assigned,  ut.IsCreator
+                var query = @"SELECT t.Id, Title, Description, Attachment, Priority, DueDate, CardId, IsComplete, SubtaskQuantity, SubtaskCompleted,
+                                     u.Id as CreatorId, u.FullName, u.Avatar, u.Email
+                              FROM TaskItems t 
+                              INNER JOIN aspnetusers u on u.Id = t.CreatorId
+                              WHERE t.Id = @taskItemId;" +
+                            @"SELECT mt.Id, u.Id as UserId, u.FullName, u.Avatar, u.Email, mt.TaskItemId
                               FROM aspnetusers u  
-                              INNER JOIN UserTasks ut on u.Id = ut.UserId 
-                              WHERE ut.TaskItemId = @taskItemId;"+
-                            @"SELECT ID, Name, Status
-                              FROM Checklists c  
-                              WHERE c.Id = @taskItemId;"+
+                              INNER JOIN MemberTasks mt on u.Id = mt.UserId 
+                              WHERE mt.TaskItemId = @taskItemId;"+
+                            @"SELECT c.Id, c.Content, c.UpdateAt, u.FullName, u.Avatar, c.UserId, c.TaskItemId
+                              FROM aspnetusers u  
+                              INNER JOIN Comments c on u.Id = c.UserId
+                              WHERE c.TaskItemId = @taskItemId;"+
                             @"SELECT ID, Name, Status
                               FROM Subtasks  
-                              WHERE ChecklistId = @taskItemId;";
+                              WHERE TaskItemId = @taskItemId;";
+
                 var parameters = new DynamicParameters();
                 parameters.Add("taskItemId", taskItemId, DbType.Int32);  
 
@@ -120,38 +118,16 @@ namespace TaskManager.API.Services.Repository
                 {
                     taskItemDto = await multiResult.ReadSingleOrDefaultAsync<TaskItemDto>();
                     if (taskItemDto != null){
-                        var users = (await multiResult.ReadAsync<UserTaskDto>()).ToList();
-                        foreach (var user in users){
-                            if(user.Assigned == true){
-                                if(taskItemDto.Assigns == null)
-                                    taskItemDto.Assigns = new List<UserTaskDto>();
-                                taskItemDto.Assigns.Add(user);
-                            }
-                            
-                            if(user.Comment != null)
-                            {
-                                if(taskItemDto.Comments == null)
-                                    taskItemDto.Comments = new List<UserTaskDto>();
-                                taskItemDto.Comments.Add(user);
+                        taskItemDto.Members = (await multiResult.ReadAsync<MemberTaskDto>()).ToList();
+                        if (taskItemDto.Members != null){
+                            // Find member request extend due date
+                            foreach (var member in taskItemDto.Members){
+                                if (member.Requested )
+                                    taskItemDto.MemberExtendDueDate = member;
                             }
                         }
-                        taskItemDto.Checklist = await multiResult.ReadSingleOrDefaultAsync<ChecklistDto>();
-                        if (taskItemDto.Checklist != null)
-                        {
-                            var subtasks = (await multiResult.ReadAsync<SubtaskDto>()).ToList();
-                            taskItemDto.Checklist.Subtasks = subtasks;
-                            // if (taskItemDto.Checklist.Subtasks != null)
-                            // {
-                            //     int subtaskQuantity = subtasks.Count();
-                            //     int taskCompleted = 0;
-                            //     for (int i = 0; i < subtaskQuantity; i++){
-                            //         if( subtasks[i].Status == true)
-                            //             taskCompleted += 1;
-                            //     }                
-                            //     taskItemDto.Checklist.Percentage = (taskCompleted/subtaskQuantity) * 100;
-                            // }
-                        }
-
+                        taskItemDto.Comments = (await multiResult.ReadAsync<CommentDto>()).ToList();
+                        taskItemDto.Subtasks = (await multiResult.ReadAsync<SubtaskDto>()).ToList();
                     }
                 }
 
@@ -228,16 +204,17 @@ namespace TaskManager.API.Services.Repository
             try{
                 var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == taskItemId);
                 _dataContext.TaskItems.Remove(taskItem);
+                var activation = new Activation{
+                    UserId = userId,
+                    WorkspaceId = workspaceId,
+                    Content = $"Remove task {taskItem.Title}",
+                    CreateAt = DateTime.Now
+                };
+                await _dataContext.Activations.AddAsync(activation);
+                
                 var isDeleted = await SaveChangeAsync();
 
                 if (isDeleted){
-                    var activation = new Activation{
-                        UserId = userId,
-                        WorkspaceId = workspaceId,
-                        Content = $"Remove task {taskItem.Title}",
-                        CreateAt = DateTime.Now
-                    };
-                    await _dataContext.Activations.AddAsync(activation);
                     return new Response{
                         Message = "Deleted task item is succeed",
                         IsSuccess = true
@@ -321,6 +298,15 @@ namespace TaskManager.API.Services.Repository
         public async Task<Response> PatchTaskItemAsync(int taskItemId, int workspaceId, string userId, JsonPatchDocument<TaskItem> patchTaskItem)
         {
             try{
+                // Check user have permission to assign
+                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
+                    x => x.WorkspaceId == workspaceId &&
+                    x.UserId == userId);                 
+                if(mwAdmin.Role == ROLE_ENUM.Member)
+                    return new Response{
+                        Message = "Bạn không được phép chỉnh sửa nhiệm vụ",
+                        IsSuccess = false
+                    };
 
                 var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == taskItemId);
                 patchTaskItem.ApplyTo(taskItem);
@@ -337,6 +323,9 @@ namespace TaskManager.API.Services.Repository
 
                 var isUpdated = await SaveChangeAsync();
                 if (isUpdated){
+
+                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+    	            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
                     return new Response{
                         Message = "Updated file is succeed",
                         IsSuccess = true
@@ -456,5 +445,246 @@ namespace TaskManager.API.Services.Repository
             string rs = JsonConvert.SerializeObject(listIndex);
             return rs;
         }
+
+        #region Member is assigned in task item
+        public async Task<Response> GetTasksItemByMemberAsync(string memberId)
+        {
+            try
+            {
+                var query = @"SELECT t.Id, Title, Priority, DueDate, IsComplete, SubtaskQuantity, SubtaskCompleted,
+                                     u.Id as CreatorId, u.FullName, u.Avatar, u.Email
+                              FROM TaskItems t 
+                              INNER JOIN aspnetusers u on u.Id = t.CreatorId
+                              INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
+                              WHERE mt.UserId = @memberId";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("memberId", memberId, DbType.String);  
+
+                List<TaskItemDto> taskItemDtos = await _dapperContext.GetListAsync<TaskItemDto>(query, parameters);
+
+                return new Response{
+                    Message = "Lấy danh sách nhiệm vụ thành công",
+                    Data = new Dictionary<string, object>{
+                        ["TaskItems"] = taskItemDtos
+                    },
+                    IsSuccess = true
+                };
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("GetTasksItemByMemberAsync: " + e.Message);
+                throw e;
+            }
+        }
+
+        public async Task<Response> AssignMemberAsync(int taskItemId, int workspaceId, string userId, List<MemberTaskDto> memberTaskDtos)
+        {
+            try{
+                // Check user have permission to assign
+                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
+                    x => x.WorkspaceId == workspaceId &&
+                    x.UserId == userId);                 
+                if(mwAdmin.Role == ROLE_ENUM.Member)
+                    return new Response{
+                        Message = "Bạn không được phép gán thành viên",
+                        IsSuccess = false
+                    };
+                
+                var membersNew = _mapper.Map<List<MemberTaskDto>, List<MemberTask>>(memberTaskDtos);
+                List<MemberTask> membersOld = _dataContext.MemberTasks.Where(x => x.TaskItemId == taskItemId).ToList();
+                // Check member new has been members old
+                foreach (var memberTask in membersNew){
+                    if (membersOld.Contains(memberTask))
+                        membersOld.Remove(memberTask);
+                    else
+                        _dataContext.MemberTasks.Add(memberTask);
+                }
+                // Remove the old members
+                foreach (var memberTask in membersOld){
+                    _dataContext.MemberTasks.Remove(memberTask);
+                }
+
+                var isSaved = await SaveChangeAsync();
+
+                var members = _dataContext.MemberTasks.Where(m => m.TaskItemId == taskItemId).ToList();
+                return new Response{
+                    Message = "Gán thành viên vào nhiệm vụ thành công",
+                    Data = new Dictionary<string,object>{
+                            ["Members"] = _mapper.Map<List<MemberTask>, List<MemberTaskDto>>(members),
+                        },
+                    IsSuccess = true
+                };
+                
+            }
+            catch (Exception e){
+                Console.WriteLine("AssignMemberAsync: " + e.Message);
+                throw e;
+            }
+        }
+
+        public async Task<Response> RemoveMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto)
+        {
+            try{
+                var memberTask = _dataContext.MemberTasks.FirstOrDefault(
+                    t => t.TaskItemId == memberTaskDto.TaskItemId 
+                    && t.UserId == memberTaskDto.UserId);
+                if(memberTask == null)
+                    return new Response{
+                        Message = "Member is not found",
+                        IsSuccess = false
+                    };
+                
+                _dataContext.MemberTasks.Remove(memberTask);
+
+                var isSaved = await SaveChangeAsync();
+
+                if (isSaved){
+                    return new Response{
+                        Message = "Deleted member to task is succeed",
+                        IsSuccess = true
+                    };
+                }
+                return new Response{
+                    Message = "Deleted member to task is failed",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e){
+                Console.WriteLine("RemoveMemberAsync: " + e.Message);
+                throw e;
+            }
+        }
+
+        public async Task<Response> ExtendDueDateMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto)
+        {
+            try{
+                // Check user have permission to assign
+                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
+                    x => x.WorkspaceId == workspaceId &&
+                    x.UserId == userId);                 
+                if(mwAdmin.Role != ROLE_ENUM.Member)
+                    return new Response{
+                        Message = "Chức này chỉ giành cho thành viên",
+                        IsSuccess = false
+                    };
+
+                var memberTask = _dataContext.MemberTasks.FirstOrDefault(
+                    m => m.TaskItemId == memberTaskDto.TaskItemId
+                    && m.UserId == userId);
+
+                memberTask.ExtendDate = memberTaskDto.ExtendDate;
+                memberTask.Requested = true;
+                     
+                _dataContext.MemberTasks.Update(memberTask);
+
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == memberTaskDto.TaskItemId);
+                
+                var activation = new Activation{
+                    UserId = userId,
+                    WorkspaceId = workspaceId,
+                    Content = $"Thành viên yêu cầu gia hạn vào {memberTask.ExtendDate.Value.ToShortDateString()} trong nhiệm vụ {taskItem.Title}",
+                    CreateAt = DateTime.Now
+                };
+                _dataContext.Activations.Add(activation);
+
+                var isSaved = await SaveChangeAsync();
+
+                if (isSaved){
+                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+    	            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                    return new Response{
+                        Message = "Yêu cầu gia hạn thành công",
+                        IsSuccess = true
+                    };
+                }
+                return new Response{
+                    Message = "Yêu cầu gia hạn thất bại",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e){
+                Console.WriteLine("CreateCommentAsync: " + e.Message);
+                throw e;
+            }
+        }
+
+        public Task<Response> ConfirmExtendMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto)
+        {
+            throw new NotImplementedException();
+        }
+        public Task<Response> SortingTasksItemByMemberAsync(string memberId)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<Response> FilteringTasksItemByMemberAsync(string memberId)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+
+        #region User comment in task item
+        public async Task<Response> CreateCommentAsync(int workspaceId, string userId, CommentDto commentDto)
+        {
+            try{
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == commentDto.TaskItemId);
+                if(taskItem == null)
+                    return new Response{
+                        Message = "Task is not found",
+                        IsSuccess = false
+                    };
+                
+                var comment = _mapper.Map<CommentDto, Comment>(commentDto);
+                comment.UserId = userId;
+                     
+                _dataContext.Comments.Add(comment);
+                
+                var activation = new Activation{
+                    UserId = userId,
+                    WorkspaceId = workspaceId,
+                    Content = $"Member comment in task {taskItem.Title}",
+                    CreateAt = DateTime.Now
+                };
+                _dataContext.Activations.Add(activation);
+
+                var isSaved = await SaveChangeAsync();
+
+                if (isSaved){
+                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+    	            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                    return new Response{
+                        Message = "Comment in task is succeed",
+                        IsSuccess = true
+                    };
+                }
+                return new Response{
+                    Message = "Comment in task is failed",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e){
+                Console.WriteLine("CreateCommentAsync: " + e.Message);
+                throw e;
+            }
+        }
+
+        public Task<Response> EditCommentAsync(int WorkspaceId, string userId, CommentDto commentDto)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<Response> DeleteCommentAsync(int taskItemId, int WorkspaceId, string userId, int userTaskId)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+        public Task<Response> AddLabelToTaskItemAsync(int workspaceId, string userId, List<LabelDto> labelDto)
+        {
+            throw new NotImplementedException();
+        }
+
     }
 }

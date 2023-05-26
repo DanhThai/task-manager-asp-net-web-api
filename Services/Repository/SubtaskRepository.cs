@@ -27,16 +27,9 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                var checklist = _dataContext.Checklists.FirstOrDefault(c => c.Id == subtaskDto.ChecklistId);
-                if (checklist == null)
-                    return new Response
-                    {
-                        Message = "Not found checklist",
-                        IsSuccess = false
-                    };
 
                 var subtask = _mapper.Map<SubtaskDto, Subtask>(subtaskDto);
-                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == subtaskDto.ChecklistId);
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == subtaskDto.TaskItemId);
                 if (taskItem == null)
                     return new Response
                     {
@@ -95,7 +88,7 @@ namespace TaskManager.API.Services.Repository
                 {
                     _dataContext.Subtasks.Remove(subtask);
 
-                    var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == subtask.ChecklistId);
+                    var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == subtask.TaskItemId);
                     taskItem.SubtaskQuantity -= 1;
                     if(subtask.Status)
                         taskItem.SubtaskCompleted -= 1;
@@ -155,7 +148,7 @@ namespace TaskManager.API.Services.Repository
                 patchSubtask.ApplyTo(subtask);
 
                 if (patchSubtask.Operations[0].path.Contains("Status")){
-                    var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == subtask.ChecklistId);
+                    var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == subtask.TaskItemId);
                     if((bool)patchSubtask.Operations[0].value){
                         taskItem.SubtaskCompleted += 1;
                     }
