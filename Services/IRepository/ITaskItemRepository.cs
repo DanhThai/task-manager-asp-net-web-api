@@ -16,19 +16,18 @@ namespace TaskManager.API.Services.IRepository
         public Task<Response> UploadFileAsync(int taskItemId, int WorkspaceId, string userId, IFormFile file);
         public Task<Response> DeleteTaskItemAsync(int taskItemId, int WorkspaceId, string userId);
 
-        public Task<Response> GetTasksItemByMemberAsync(string memberId);
-        public Task<Response> SortingTasksItemByMemberAsync(string memberId);
-        public Task<Response> FilteringTasksItemByMemberAsync(string memberId);
+        public Task<Response> GetTasksItemByMemberAsync(string memberId, PRIORITY_ENUM? priority, bool? isComplete, bool? desc);
         public Task<Response> AssignMemberAsync(int taskItemId, int workspaceId, string userId, List<MemberTaskDto> memberTaskDto);
-        public Task<Response> ExtendDueDateMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
-        public Task<Response> ConfirmExtendMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
+        public Task<Response> ExtendDueDateByMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
+        public Task<Response> AcceptExtendDueDateAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
+        public Task<Response> RejectExtendDueDateAsync(int workspaceId, string userId, int memberTaskId);
         // public Task<Response> RemoveMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
 
         public Task<Response> CreateCommentAsync(int workspaceId, string userId, CommentDto commentDto);
-        public Task<Response> EditCommentAsync(int workspaceId, string userId, CommentDto commentDto);
-        public Task<Response> DeleteCommentAsync(int taskItemId, int workspaceId, string userId, int userTaskId);
+        public Task<Response> EditCommentAsync(int commentId, string userId, CommentDto commentDto);
+        public Task<Response> DeleteCommentAsync(int commentId, string userId );
 
-        public Task<Response> AddLabelToTaskItemAsync(int workspaceId, string userId, List<LabelDto> labelDto);
+        public Task<Response> AddLabelToTaskItemAsync(int taskItemId, List<LabelDto> labelDto);
 
 
         public Task<bool> SaveChangeAsync();

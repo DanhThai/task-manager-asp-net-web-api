@@ -6,7 +6,7 @@ namespace TaskManager.API.Data.Models
     {
         [Key]
         public int Id { get; set; }
-        public string? Content { get; set; }
+        public string Content { get; set; }
         public DateTime CreateAt { get; set; }
         public DateTime UpdateAt { get; set; }
         public string UserId { get; set; }

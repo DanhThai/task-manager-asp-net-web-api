@@ -18,6 +18,10 @@ namespace TaskManager.API.Data.DTOs
         public bool? IsOwner { get; internal set;} = false;
         public string CreatorId { get; internal set;}
         public string CreatorName { get; internal set;}
+        public int TaskQuantity { get; set; } = 0;
+        public int TaskCompleted { get; set; } = 0;
+        public bool IsComplete { get; set; } = false;
+
         public List<MemberWorkspaceDto> Members {get; internal set;} = new List<MemberWorkspaceDto>();
         public List<CardDto> Cards {get; internal set;} = new List<CardDto>();
         public List<ActivationDto> Activations {get; internal set;} = new List<ActivationDto>();

@@ -82,7 +82,7 @@ services.AddHttpContextAccessor();
 services.AddScoped<IAccountRepository,AccountRepository>();
 services.AddScoped<IWorkspaceRepository,WorkspaceRepository>();
 services.AddScoped<ITaskItemRepository,TaskItemRepository>();
-// services.AddScoped<IChecklistRepository,ChecklistRepository>();
+services.AddScoped<ILabelRepository,LabelRepository>();
 services.AddScoped<ISubtaskRepository,SubtaskRepository>();
 services.AddTransient<IWebService,WebService>();
 services.AddSingleton<DapperContext>();

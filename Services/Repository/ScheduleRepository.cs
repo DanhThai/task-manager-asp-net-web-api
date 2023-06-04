@@ -121,11 +121,6 @@ namespace TaskManager.API.Services.Repository
             throw new NotImplementedException();
         }
 
-        public async Task<bool> SaveChangeAsync()
-        {
-            return await _dataContext.SaveChangesAsync() > 0;
-        }
-
         public async Task<Response> UpdateScheduleAsync(int scheduleId, string userId, ScheduleDto scheduleDto)
         {
             try
@@ -170,6 +165,10 @@ namespace TaskManager.API.Services.Repository
                 Console.WriteLine("UpdatescheduleAsync " + e.Message);
                 throw e;
             }
+        }
+        public async Task<bool> SaveChangeAsync()
+        {
+            return await _dataContext.SaveChangesAsync() > 0;
         }
     }
 }

@@ -17,6 +17,7 @@ namespace TaskManager.API.Data
         public DbSet<MemberTask> MemberTasks { get; set; }
         public DbSet<MemberWorkspace> MemberWorkspaces { get; set; }
         public DbSet<Label> Labels { get; set; }
+        public DbSet<TaskLabel> TaskLabels { get; set; }
         public DbSet<Comment> Comments { get; set; }
         public DbSet<Subtask> Subtasks { get; set; }
         public DbSet<Schedule> Schedules { get; set; }

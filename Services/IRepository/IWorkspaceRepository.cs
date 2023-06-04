@@ -18,7 +18,6 @@ namespace TaskManager.API.Services.IRepository
 
         public Task<Response> GetMembersOfWorkspaceAsync(int workspaceId);
         public Task<Response> GetMembersWithTaskItemAsync(int workspaceId, string userId);
-        public Task<Response> GetTasksItemByMemberAsync(string memberId);
         
         public Task<bool> SaveChangeAsync();
    

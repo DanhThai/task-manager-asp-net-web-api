@@ -15,6 +15,7 @@ namespace TaskManager.API.Helper
             CreateMap<ActivationDto, Activation>().ReverseMap();
             CreateMap<SubtaskDto, Subtask>().ReverseMap();
             CreateMap<Schedule, ScheduleDto>().ReverseMap();
+            CreateMap<Label, LabelDto>().ReverseMap();
             CreateMap<MemberTask, MemberTaskDto>().ReverseMap();
             CreateMap<MemberWorkspace, MemberWorkspaceDto>().ReverseMap();
             CreateMap<Comment, CommentDto>().ReverseMap();

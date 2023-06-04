@@ -479,36 +479,6 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
-        public async Task<Response> GetTasksItemByMemberAsync(string memberId)
-        {
-            try
-            {
-                var query = @"SELECT t.Id, Title, Priority, DueDate, IsComplete, SubtaskQuantity, SubtaskCompleted,
-                                     u.Id as CreatorId, u.FullName, u.Avatar, u.Email
-                              FROM TaskItems t 
-                              INNER JOIN aspnetusers u on u.Id = t.CreatorId
-                              INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
-                              WHERE mt.UserId = @memberId";
-
-                var parameters = new DynamicParameters();
-                parameters.Add("memberId", memberId, DbType.String);  
-
-                List<TaskItemDto> taskItemDtos = await _dapperContext.GetListAsync<TaskItemDto>(query, parameters);
-
-                return new Response{
-                    Message = "Lấy danh sách nhiệm vụ thành công",
-                    Data = new Dictionary<string, object>{
-                        ["TaskItems"] = taskItemDtos
-                    },
-                    IsSuccess = true
-                };
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("GetTasksItemByMemberAsync: " + e.Message);
-                throw e;
-            }
-        }
         public async Task<Response> LeaveOnWorkspaceAsync(int workspaceId, string userId)
         {
             try{

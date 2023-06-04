@@ -11,7 +11,7 @@ namespace TaskManager.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    // [Authorize]
     public class TaskItemController : ControllerBase
     {
         private readonly ITaskItemRepository _taskItemRepository;
@@ -22,11 +22,11 @@ namespace TaskManager.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateTaskItem([FromQuery]int WorkspaceId, TaskItemDto taskItemDto){
+        public async Task<IActionResult> CreateTaskItem([FromQuery]int workspaceId, TaskItemDto taskItemDto){
             try{
-                if(WorkspaceId > 0){
+                if(workspaceId > 0){
                     var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                    var rs = await _taskItemRepository.CreateTaskItemAsync(WorkspaceId, userId, taskItemDto); 
+                    var rs = await _taskItemRepository.CreateTaskItemAsync(workspaceId, userId, taskItemDto); 
                     return Ok(rs);
                 }
                 return BadRequest();
@@ -52,10 +52,10 @@ namespace TaskManager.API.Controllers
         }
 
         [HttpPut("{id}", Name = "UpdateTaskItemById")]
-        public async Task<IActionResult> UpdateTaskItemByUser(int id, [FromQuery]int WorkspaceId, TaskItemDto taskItemDto){
+        public async Task<IActionResult> UpdateTaskItemByUser(int id, [FromQuery]int workspaceId, TaskItemDto taskItemDto){
             try{    
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                var rs = await _taskItemRepository.UpdateTaskItemAsync(id, WorkspaceId, userId, taskItemDto); 
+                var rs = await _taskItemRepository.UpdateTaskItemAsync(id, workspaceId, userId, taskItemDto); 
                 return Ok(rs);
             }
             catch{
@@ -76,10 +76,10 @@ namespace TaskManager.API.Controllers
         }
 
         [HttpPost("{id}/MoveTask")]
-        public async Task<IActionResult> MoveTaskItemByUser(int id, [FromQuery]int WorkspaceId,  MoveTaskDto moveTaskDto){
+        public async Task<IActionResult> MoveTaskItemByUser(int id, [FromQuery]int workspaceId,  MoveTaskDto moveTaskDto){
             try{  
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                var rs = await _taskItemRepository.MoveTaskItemAsync(id, WorkspaceId, userId, moveTaskDto); 
+                var rs = await _taskItemRepository.MoveTaskItemAsync(id, workspaceId, userId, moveTaskDto); 
                 return Ok(rs);
             }
             catch{
@@ -88,32 +88,90 @@ namespace TaskManager.API.Controllers
         }
 
         [HttpPost("{id}/upload-file")]
-        public async Task<IActionResult> UploadFile(int id, [FromQuery]int WorkspaceId,  [FromForm] IFormFile file){
+        public async Task<IActionResult> UploadFile(int id, [FromQuery]int workspaceId,  [FromForm] IFormFile file){
             if (file!=null){
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                var rs = await _taskItemRepository.UploadFileAsync(id, WorkspaceId, userId, file);
+                var rs = await _taskItemRepository.UploadFileAsync(id, workspaceId, userId, file);
                 return Ok(rs);
             }
             return BadRequest();
         }
 
         [HttpDelete("{id}", Name = "DeleteTaskItemById")]
-        public async Task<IActionResult> DeleteTaskItemByUser(int id, [FromQuery]int WorkspaceId){
+        public async Task<IActionResult> DeleteTaskItemByUser(int id, [FromQuery]int workspaceId){
             try{
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                var rs = await _taskItemRepository.DeleteTaskItemAsync(id, WorkspaceId, userId); 
+                var rs = await _taskItemRepository.DeleteTaskItemAsync(id, workspaceId, userId); 
                 return Ok(rs);
             }
             catch{
                 return BadRequest();
             }
         }
+        
+        
+        
         [HttpPost("{id}/AssignMember")]
-        public async Task<IActionResult> AssignMemberToTaskItem(int id, [FromQuery]int workspaceId, [FromBody] List<MemberTaskDto> memberTaskDto){
+        public async Task<IActionResult> AssignMemberToTaskItem(int id, [FromQuery]int workspaceId, [FromBody] List<MemberTaskDto> memberTaskDtos){
             try{
                 if(workspaceId >0){    
                     var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                    var rs = await _taskItemRepository.AssignMemberAsync(id, workspaceId, userId, memberTaskDto); 
+                    var rs = await _taskItemRepository.AssignMemberAsync(id, workspaceId, userId, memberTaskDtos); 
+                    return Ok(rs);
+                }
+                return BadRequest();
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpGet("Member")]
+        public async Task<IActionResult> GetTaskItemByMember(string memberId, PRIORITY_ENUM? priority, bool? isComplete, bool? desc){
+            try{
+                var rs = await _taskItemRepository.GetTasksItemByMemberAsync(memberId, priority, isComplete, desc); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpPost("ExtendDueDate")]
+        public async Task<IActionResult> RequestExtendDueDateByMember([FromQuery]int workspaceId, [FromBody] MemberTaskDto memberTaskDto){
+            try{
+                if(workspaceId >0){    
+                    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                    var rs = await _taskItemRepository.ExtendDueDateByMemberAsync(workspaceId, userId, memberTaskDto); 
+                    return Ok(rs);
+                }
+                return BadRequest();
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpPost("AcceptDueDate")]
+        public async Task<IActionResult> AcceptExtendDueDate([FromQuery]int workspaceId, [FromBody] MemberTaskDto memberTaskDto){
+            try{
+                if(workspaceId >0){    
+                    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                    var rs = await _taskItemRepository.AcceptExtendDueDateAsync(workspaceId, userId, memberTaskDto); 
+                    return Ok(rs);
+                }
+                return BadRequest();
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+        [HttpPost("RejectDueDate")]
+        public async Task<IActionResult> RejectExtendDueDate([FromQuery]int workspaceId, int memberTaskId){
+            try{
+                if(workspaceId >0){    
+                    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                    var rs = await _taskItemRepository.RejectExtendDueDateAsync(workspaceId, userId, memberTaskId); 
                     return Ok(rs);
                 }
                 return BadRequest();
@@ -137,6 +195,61 @@ namespace TaskManager.API.Controllers
         //         return BadRequest();
         //     }
         // }
+
+        #region Comment
+        [HttpPost("Comment")]
+        public async Task<IActionResult> CreateCommentInTaskItem([FromQuery]int workspaceId, CommentDto commentDto){
+            try{
+                if(workspaceId > 0){
+                    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                    var rs = await _taskItemRepository.CreateCommentAsync(workspaceId, userId, commentDto); 
+                    return Ok(rs);
+                }
+                return BadRequest();
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+
+        [HttpPut("Comment/{id}", Name = "UpdateCommentById")]
+        public async Task<IActionResult> UpdateCommentInTaskItem(int id, CommentDto commentDto){
+            try{    
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _taskItemRepository.EditCommentAsync(id, userId, commentDto); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        [HttpDelete("Comment/{id}", Name = "DeleteCommentById")]
+        public async Task<IActionResult> DeleteCommentInTaskItem(int id){
+            try{
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _taskItemRepository.DeleteCommentAsync(id, userId); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
+        #endregion
+
+        [HttpPost("{id}/AddLabels")]
+        public async Task<IActionResult> AddLabelToTaskItem(int id, List<LabelDto> labelDtos){
+            try{   
+                var rs = await _taskItemRepository.AddLabelToTaskItemAsync(id, labelDtos); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }
+
 
     }
 }

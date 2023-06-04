@@ -135,16 +135,7 @@ namespace TaskManager.API.Controllers
             }
         }
 
-        [HttpGet("Member/{memberId}/TaskItems")]
-        public async Task<IActionResult> GetTaskItemByMember(string memberId){
-            try{
-                var rs = await _workspaceRepository.GetTasksItemByMemberAsync(memberId); 
-                return Ok(rs);
-            }
-            catch{
-                return BadRequest();
-            }
-        }
+
         [HttpPost("{id}/LeaveWorkspace")]
         public async Task<IActionResult> LeaveOnWorkspace(int id){
             try{

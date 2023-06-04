@@ -22,6 +22,11 @@ namespace TaskManager.API.Data.Models
         public DateTime? CreateAt { get; set; }
         public DateTime? UpdateAt { get; set; }
 
+        public DateTime VisitDate { get; set; }
+        public int TaskQuantity { get; set; } = 0;
+        public int TaskCompleted { get; set; } = 0;
+        public bool IsComplete { get; set; } = false;
+
         public ICollection<Card> Cards { get; set; }
         public ICollection<MemberWorkspace> MemberWorkspaces { get; set; }
         public ICollection<Account> Users { get; set; }= null;

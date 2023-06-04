@@ -36,7 +36,7 @@ namespace TaskManager.API.Data.DTOs
         public string Email { get; internal set; }
         public string Avatar { get; internal set; }
 
-        public MemberTaskDto MemberExtendDueDate { get; set; }
+        public MemberTaskDto? MemberExtendDueDate { get; internal set; }
 
         public List<MemberTaskDto> Members { get; internal set; } = new List<MemberTaskDto>();
         public List<LabelDto> Labels { get; internal set; } = new List<LabelDto>();

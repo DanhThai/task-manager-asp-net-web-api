@@ -74,24 +74,6 @@ namespace TaskManager.API.Data.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Labels",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    Name = table.Column<string>(type: "varchar(50)", maxLength: 50, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    Color = table.Column<string>(type: "varchar(30)", maxLength: 30, nullable: false)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    CreateAt = table.Column<DateTime>(type: "datetime(6)", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Labels", x => x.Id);
-                })
-                .Annotation("MySql:CharSet", "utf8mb4");
-
-            migrationBuilder.CreateTable(
                 name: "Workspaces",
                 columns: table => new
                 {
@@ -111,7 +93,11 @@ namespace TaskManager.API.Data.Migrations
                     CreatorName = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     CreateAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
-                    UpdateAt = table.Column<DateTime>(type: "datetime(6)", nullable: true)
+                    UpdateAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
+                    VisitDate = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    TaskQuantity = table.Column<int>(type: "int", nullable: false),
+                    TaskCompleted = table.Column<int>(type: "int", nullable: false),
+                    IsComplete = table.Column<bool>(type: "tinyint(1)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -289,8 +275,6 @@ namespace TaskManager.API.Data.Migrations
                     TaskQuantity = table.Column<int>(type: "int", nullable: false),
                     TaskOrder = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    CreateAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
-                    UpdateAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     WorkspaceId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
@@ -298,6 +282,58 @@ namespace TaskManager.API.Data.Migrations
                     table.PrimaryKey("PK_Cards", x => x.Id);
                     table.ForeignKey(
                         name: "FK_Cards_Workspaces_WorkspaceId",
+                        column: x => x.WorkspaceId,
+                        principalTable: "Workspaces",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "Labels",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Name = table.Column<string>(type: "varchar(50)", maxLength: 50, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Color = table.Column<string>(type: "varchar(30)", maxLength: 30, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    CreateAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
+                    WorkspaceId = table.Column<int>(type: "int", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Labels", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Labels_Workspaces_WorkspaceId",
+                        column: x => x.WorkspaceId,
+                        principalTable: "Workspaces",
+                        principalColumn: "Id");
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "MemberWorkspaces",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Role = table.Column<int>(type: "int", nullable: false),
+                    UserId = table.Column<string>(type: "varchar(255)", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    WorkspaceId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_MemberWorkspaces", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_MemberWorkspaces_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_MemberWorkspaces_Workspaces_WorkspaceId",
                         column: x => x.WorkspaceId,
                         principalTable: "Workspaces",
                         principalColumn: "Id",
@@ -333,34 +369,6 @@ namespace TaskManager.API.Data.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "UserWorkspaces",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    IsOwner = table.Column<bool>(type: "tinyint(1)", nullable: false),
-                    UserId = table.Column<string>(type: "varchar(255)", nullable: true)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
-                    WorkspaceId = table.Column<int>(type: "int", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserWorkspaces", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_UserWorkspaces_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_UserWorkspaces_Workspaces_WorkspaceId",
-                        column: x => x.WorkspaceId,
-                        principalTable: "Workspaces",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                })
-                .Annotation("MySql:CharSet", "utf8mb4");
-
-            migrationBuilder.CreateTable(
                 name: "TaskItems",
                 columns: table => new
                 {
@@ -378,7 +386,7 @@ namespace TaskManager.API.Data.Migrations
                     SubtaskQuantity = table.Column<int>(type: "int", nullable: false),
                     SubtaskCompleted = table.Column<int>(type: "int", nullable: false),
                     IsComplete = table.Column<bool>(type: "tinyint(1)", nullable: false),
-                    Priority = table.Column<byte>(type: "tinyint unsigned", nullable: false),
+                    Priority = table.Column<int>(type: "int", nullable: false),
                     DueDate = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     CreatAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     UpdateAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
@@ -472,11 +480,20 @@ namespace TaskManager.API.Data.Migrations
                     Name = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     Status = table.Column<bool>(type: "tinyint(1)", nullable: false),
-                    TaskItemId = table.Column<int>(type: "int", nullable: false)
+                    TaskItemId = table.Column<int>(type: "int", nullable: false),
+                    MemberId = table.Column<string>(type: "longtext", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    AssignedMemberId = table.Column<string>(type: "varchar(255)", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Subtasks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Subtasks_AspNetUsers_AssignedMemberId",
+                        column: x => x.AssignedMemberId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_Subtasks_TaskItems_TaskItemId",
                         column: x => x.TaskItemId,
@@ -487,7 +504,7 @@ namespace TaskManager.API.Data.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "TaskLabel",
+                name: "TaskLabels",
                 columns: table => new
                 {
                     TaskItemId = table.Column<int>(type: "int", nullable: false),
@@ -495,15 +512,15 @@ namespace TaskManager.API.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_TaskLabel", x => new { x.LabelId, x.TaskItemId });
+                    table.PrimaryKey("PK_TaskLabels", x => new { x.LabelId, x.TaskItemId });
                     table.ForeignKey(
-                        name: "FK_TaskLabel_Labels_LabelId",
+                        name: "FK_TaskLabels_Labels_LabelId",
                         column: x => x.LabelId,
                         principalTable: "Labels",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_TaskLabel_TaskItems_TaskItemId",
+                        name: "FK_TaskLabels_TaskItems_TaskItemId",
                         column: x => x.TaskItemId,
                         principalTable: "TaskItems",
                         principalColumn: "Id",
@@ -574,6 +591,11 @@ namespace TaskManager.API.Data.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Labels_WorkspaceId",
+                table: "Labels",
+                column: "WorkspaceId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_MemberTasks_TaskItemId",
                 table: "MemberTasks",
                 column: "TaskItemId");
@@ -584,9 +606,24 @@ namespace TaskManager.API.Data.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_MemberWorkspaces_UserId",
+                table: "MemberWorkspaces",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_MemberWorkspaces_WorkspaceId",
+                table: "MemberWorkspaces",
+                column: "WorkspaceId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Schedules_WorkspaceId",
                 table: "Schedules",
                 column: "WorkspaceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Subtasks_AssignedMemberId",
+                table: "Subtasks",
+                column: "AssignedMemberId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Subtasks_TaskItemId",
@@ -604,19 +641,9 @@ namespace TaskManager.API.Data.Migrations
                 column: "CreatorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TaskLabel_TaskItemId",
-                table: "TaskLabel",
+                name: "IX_TaskLabels_TaskItemId",
+                table: "TaskLabels",
                 column: "TaskItemId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserWorkspaces_UserId",
-                table: "UserWorkspaces",
-                column: "UserId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserWorkspaces_WorkspaceId",
-                table: "UserWorkspaces",
-                column: "WorkspaceId");
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
@@ -646,16 +673,16 @@ namespace TaskManager.API.Data.Migrations
                 name: "MemberTasks");
 
             migrationBuilder.DropTable(
+                name: "MemberWorkspaces");
+
+            migrationBuilder.DropTable(
                 name: "Schedules");
 
             migrationBuilder.DropTable(
                 name: "Subtasks");
 
             migrationBuilder.DropTable(
-                name: "TaskLabel");
-
-            migrationBuilder.DropTable(
-                name: "UserWorkspaces");
+                name: "TaskLabels");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");

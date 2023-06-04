@@ -9,7 +9,7 @@ namespace TaskManager.API.Data.DTOs
         public int Id { get; set;}
         public bool Requested { get; internal set; } = false;
         public DateTime? ExtendDate { get; set;}
-        [Required]
+        
         public string UserId { get; set;}
         public string FullName { get; internal set; }
         public string Avatar { get; internal set; } = null;

@@ -11,7 +11,7 @@ using TaskManager.API.Data;
 namespace TaskManager.API.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    [Migration("20230523152424_InitialDb")]
+    [Migration("20230604134839_InitialDb")]
     partial class InitialDb
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -262,9 +262,6 @@ namespace TaskManager.API.Data.Migrations
                     b.Property<int>("Code")
                         .HasColumnType("int");
 
-                    b.Property<DateTime?>("CreateAt")
-                        .HasColumnType("datetime(6)");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -276,9 +273,6 @@ namespace TaskManager.API.Data.Migrations
 
                     b.Property<int>("TaskQuantity")
                         .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdateAt")
-                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("WorkspaceId")
                         .HasColumnType("int");
@@ -339,7 +333,12 @@ namespace TaskManager.API.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("varchar(50)");
 
+                    b.Property<int?>("WorkspaceId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("Labels");
                 });
@@ -369,6 +368,30 @@ namespace TaskManager.API.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("MemberTasks");
+                });
+
+            modelBuilder.Entity("TaskManager.API.Data.Models.MemberWorkspace", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("WorkspaceId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("MemberWorkspaces");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Schedule", b =>
@@ -409,6 +432,12 @@ namespace TaskManager.API.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
+                    b.Property<string>("AssignedMemberId")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("MemberId")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -421,6 +450,8 @@ namespace TaskManager.API.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AssignedMemberId");
 
                     b.HasIndex("TaskItemId");
 
@@ -460,8 +491,8 @@ namespace TaskManager.API.Data.Migrations
                     b.Property<bool>("IsComplete")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<byte>("Priority")
-                        .HasColumnType("tinyint unsigned");
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
 
                     b.Property<int>("SubtaskCompleted")
                         .HasColumnType("int");
@@ -498,31 +529,7 @@ namespace TaskManager.API.Data.Migrations
 
                     b.HasIndex("TaskItemId");
 
-                    b.ToTable("TaskLabel");
-                });
-
-            modelBuilder.Entity("TaskManager.API.Data.Models.UserWorkspace", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsOwner")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<int>("WorkspaceId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("WorkspaceId");
-
-                    b.ToTable("UserWorkspaces");
+                    b.ToTable("TaskLabels");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Workspace", b =>
@@ -546,10 +553,19 @@ namespace TaskManager.API.Data.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("longtext");
 
+                    b.Property<bool>("IsComplete")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("Logo")
                         .HasColumnType("longtext");
 
                     b.Property<int>("Permission")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TaskCompleted")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TaskQuantity")
                         .HasColumnType("int");
 
                     b.Property<string>("Title")
@@ -558,6 +574,9 @@ namespace TaskManager.API.Data.Migrations
                         .HasColumnType("varchar(100)");
 
                     b.Property<DateTime?>("UpdateAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("VisitDate")
                         .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
@@ -663,6 +682,15 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TaskManager.API.Data.Models.Label", b =>
+                {
+                    b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
+                        .WithMany("Labels")
+                        .HasForeignKey("WorkspaceId");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("TaskManager.API.Data.Models.MemberTask", b =>
                 {
                     b.HasOne("TaskManager.API.Data.Models.TaskItem", "TaskItem")
@@ -680,6 +708,23 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TaskManager.API.Data.Models.MemberWorkspace", b =>
+                {
+                    b.HasOne("TaskManager.API.Data.Models.Account", "User")
+                        .WithMany("MemberWorkspaces")
+                        .HasForeignKey("UserId");
+
+                    b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
+                        .WithMany("MemberWorkspaces")
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("TaskManager.API.Data.Models.Schedule", b =>
                 {
                     b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
@@ -693,11 +738,17 @@ namespace TaskManager.API.Data.Migrations
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Subtask", b =>
                 {
+                    b.HasOne("TaskManager.API.Data.Models.Account", "AssignedMember")
+                        .WithMany("Subtasks")
+                        .HasForeignKey("AssignedMemberId");
+
                     b.HasOne("TaskManager.API.Data.Models.TaskItem", "TaskItem")
                         .WithMany("Subtasks")
                         .HasForeignKey("TaskItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("AssignedMember");
 
                     b.Navigation("TaskItem");
                 });
@@ -738,23 +789,6 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("TaskItem");
                 });
 
-            modelBuilder.Entity("TaskManager.API.Data.Models.UserWorkspace", b =>
-                {
-                    b.HasOne("TaskManager.API.Data.Models.Account", "User")
-                        .WithMany("UserWorkspaces")
-                        .HasForeignKey("UserId");
-
-                    b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
-                        .WithMany("UserWorkspaces")
-                        .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-
-                    b.Navigation("Workspace");
-                });
-
             modelBuilder.Entity("TaskManager.API.Data.Models.Account", b =>
                 {
                     b.Navigation("Activations");
@@ -763,9 +797,11 @@ namespace TaskManager.API.Data.Migrations
 
                     b.Navigation("MemberTasks");
 
-                    b.Navigation("TaskItems");
+                    b.Navigation("MemberWorkspaces");
 
-                    b.Navigation("UserWorkspaces");
+                    b.Navigation("Subtasks");
+
+                    b.Navigation("TaskItems");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Card", b =>
@@ -795,9 +831,11 @@ namespace TaskManager.API.Data.Migrations
 
                     b.Navigation("Cards");
 
-                    b.Navigation("Schedules");
+                    b.Navigation("Labels");
 
-                    b.Navigation("UserWorkspaces");
+                    b.Navigation("MemberWorkspaces");
+
+                    b.Navigation("Schedules");
                 });
 #pragma warning restore 612, 618
         }

@@ -527,7 +527,7 @@ namespace TaskManager.API.Data.Migrations
 
                     b.HasIndex("TaskItemId");
 
-                    b.ToTable("TaskLabel");
+                    b.ToTable("TaskLabels");
                 });
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Workspace", b =>
@@ -551,10 +551,19 @@ namespace TaskManager.API.Data.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("longtext");
 
+                    b.Property<bool>("IsComplete")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("Logo")
                         .HasColumnType("longtext");
 
                     b.Property<int>("Permission")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TaskCompleted")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TaskQuantity")
                         .HasColumnType("int");
 
                     b.Property<string>("Title")
@@ -563,6 +572,9 @@ namespace TaskManager.API.Data.Migrations
                         .HasColumnType("varchar(100)");
 
                     b.Property<DateTime?>("UpdateAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("VisitDate")
                         .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
