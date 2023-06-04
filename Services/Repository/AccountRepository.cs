@@ -61,7 +61,7 @@ namespace TaskManager.API.Services.Repository
                 {
                     return new Response
                     {
-                        Message = "Email is not confirmed.",
+                        Message = "Email chưa được xác thực.",
                         IsSuccess = false
                     };
                 }
@@ -84,7 +84,7 @@ namespace TaskManager.API.Services.Repository
                 };
                 return new Response
                 {
-                    Message = "Login successful",
+                    Message = "Đăng nhập thành công.",
                     Data = data,
                     IsSuccess = true
                 };
@@ -93,7 +93,7 @@ namespace TaskManager.API.Services.Repository
             {
                 return new Response
                 {
-                    Message = "Email or Password are not true.",
+                    Message = "Email hoặc mật khẩu không đúng.",
                     IsSuccess = false
                 };
             }
@@ -156,14 +156,14 @@ namespace TaskManager.API.Services.Repository
 
                         return new Response
                         {
-                            Message = "Create Account successfully. Please confirm your account we've just sent your email.",
-                            IsSuccess = false
+                            Message = "Tạo tài khoản thành công. Hãy xác nhận tài khoản qua email.",
+                            IsSuccess = true
                         };
 
                     }
                     return new Response
                     {
-                        Message = "User is not created",
+                        Message = "Tài khoản không tạo được",
                         IsSuccess = false
                     };
                 }
@@ -171,7 +171,7 @@ namespace TaskManager.API.Services.Repository
                 {
                     return new Response
                     {
-                        Message = "Email is invalid",
+                        Message = "Email đã tồn tại, bạn hãy nhập email khác.",
                         IsSuccess = false
                     };
                 }
@@ -181,8 +181,8 @@ namespace TaskManager.API.Services.Repository
                 Console.WriteLine("Exception: register" + ex.Message);
                 return new Response
                 {
-                    Message = "Can not create Account",
-                    IsSuccess = true
+                    Message = $"Đã có lỗi xảy ra: {ex.Message} .",
+                    IsSuccess = false
                 };
                 // throw new NotImplementedException();
             }
@@ -272,13 +272,13 @@ namespace TaskManager.API.Services.Repository
                     }
                     return new Response
                     {
-                        Message = "Email confirmation is failed",
+                        Message = "Xác thực email bị lỗi",
                         IsSuccess = false
                     };
                 }
                 return new Response
                 {
-                    Message = "User does not exist",
+                    Message = "Tài khoản không tồn tại",
                     IsSuccess = false
                 };
             }
@@ -318,7 +318,7 @@ namespace TaskManager.API.Services.Repository
 
                     return new Response
                     {
-                        Message = "Upload avatar successfully",
+                        Message = "Tải ảnh thành công",
                         Data = new Dictionary<string, object>
                         {
                             ["imageUrl"] = imgUrl
@@ -328,7 +328,7 @@ namespace TaskManager.API.Services.Repository
                 }
                 return new Response
                 {
-                    Message = "Avatar is not uploaded",
+                    Message = "Tải ảnh đã bị lỗi",
                     IsSuccess = false
                 };
             }
