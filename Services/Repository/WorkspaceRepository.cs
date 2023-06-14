@@ -69,7 +69,7 @@ namespace TaskManager.API.Services.Repository
                     workspaceDto = _mapper.Map<Workspace, WorkspaceDto>(workspace);
 
                     return new Response{
-                        Message = "Created workspace successfully",
+                        Message = "Tạo dự án thành công",
                         Data = new Dictionary<string, object>{
                             ["Workspace"] = workspaceDto
                         },
@@ -77,7 +77,7 @@ namespace TaskManager.API.Services.Repository
                     };
                 }
                 return new Response{
-                    Message = "Created workspace is failed",
+                    Message = "Tạo dự án thất bại",
                     IsSuccess = false
                 };
             }
@@ -91,7 +91,7 @@ namespace TaskManager.API.Services.Repository
         {
             try{
                 var currentDay = DateTime.Now.AddDays(-10);
-                var query = @"SELECT Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName 
+                var query = @"SELECT Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted 
                               FROM Workspaces w WHERE w.Id = @WorkspaceId;" +
                             @"SELECT u.Id, u.FullName, u.Email, u.Avatar, mw.Role
                               FROM aspnetusers u
@@ -128,7 +128,7 @@ namespace TaskManager.API.Services.Repository
 
                             if(!isMember && workspaceDto.Permission == 1)
                                 return new Response{
-                                    Message = "You don't have permission to get workspace",
+                                    Message = "Bạn không có quyền xem dự án này.",
                                     IsSuccess = false
                                 };
 
@@ -145,7 +145,7 @@ namespace TaskManager.API.Services.Repository
                 }
                 if (workspaceDto == null){
                     return new Response{
-                        Message = "Not found workspace",
+                        Message = "Không tồn tại dự án.",
                         IsSuccess = false
                     };
                 }
@@ -190,7 +190,7 @@ namespace TaskManager.API.Services.Repository
                 workspaceDto.Cards = cardDict.Values.ToList();
                 
                 return new Response{
-                    Message = "Get workspace successfully",
+                    Message = "Lấy dự án thành công",
                     Data = new Dictionary<string, object>{
                         ["Workspace"] = workspaceDto
                     },
@@ -207,18 +207,19 @@ namespace TaskManager.API.Services.Repository
         {
             try{
                 // var workspaces =  _dataContext.Workspaces.Where( w => w.Users.FirstOrDefault(u => u.Id == userId) != null).ToList();
-                var query = @"SELECT w.Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, uw.IsOwner 
+                var query = @"SELECT w.Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted, mw.Role as MyRole
                               FROM Workspaces w
-                              INNER JOIN UserWorkspaces uw on w.Id = uw.WorkspaceId
-                              WHERE uw.UserId = @userId";
+                              INNER JOIN MemberWorkspaces mw on w.Id = mw.WorkspaceId
+                              WHERE mw.UserId = @userId";
                 var parameters = new DynamicParameters();
                 parameters.Add("userId", userId, DbType.String);             
                 List<WorkspaceDto> workspaceDtos = await _dapperContext.GetListAsync<WorkspaceDto>(query, parameters);
                 
                 // List<WorkspaceDto> workspaceDtos = _mapper.Map<List<Workspace>, List<WorkspaceDto>>(workspaces);
-                
+                if (workspaceDtos == null)
+                    workspaceDtos = new List<WorkspaceDto>();
                 return new Response{
-                        Message = "Get workspace successfully",
+                        Message = "Lấy danh sách dự án thành công",
                         Data = new Dictionary<string, object>{
                             ["Workspaces"] = workspaceDtos
                         },
@@ -237,7 +238,7 @@ namespace TaskManager.API.Services.Repository
                 var workspace =  _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceId);
                 if (workspace == null){
                     return new Response{
-                        Message = "Not found workspace",
+                        Message = "dự án không tồn tại",
                         IsSuccess = false
                     };
                 }
@@ -245,12 +246,12 @@ namespace TaskManager.API.Services.Repository
                 var save = await SaveChangeAsync();
                 if (save){
                     return new Response{
-                        Message = "Deleted workspace successfully",
+                        Message = "Xóa dự án thành công",
                         IsSuccess = true
                     };
                 }
                 return new Response{
-                    Message = "Deleted workspace is failed",
+                    Message = "Không thể xóa dự án",
                     IsSuccess = false
                 };
             }
@@ -265,7 +266,7 @@ namespace TaskManager.API.Services.Repository
                 var workspace =  _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceDto.Id);
                 if (workspace == null){
                     return new Response{
-                        Message = "Not found workspace",
+                        Message = "Không tìm thấy dự án",
                         IsSuccess = false
                     };
                 }
@@ -291,12 +292,12 @@ namespace TaskManager.API.Services.Repository
     	            await _hubService.Clients.Group($"Workspace-{workspaceDto.Id}").SendWorkspaceAsync(workspaceDto);
 
                     return new Response{
-                        Message = "Updated workspace successfully",
+                        Message = "Cập nhật dự án thành công.",
                         IsSuccess = true
                     };
                 }
                 return new Response{
-                    Message = "Updated workspace is failed",
+                    Message = "Cập nhật dự án thất bại.",
                     IsSuccess = false
                 };
             }
@@ -314,8 +315,14 @@ namespace TaskManager.API.Services.Repository
         public async Task<Response> InviteMemberToWorkspaceAsync(int workspaceId, MemberWorkspaceDto member)
         {
             try{
-                var user = _dataContext.Users.FirstOrDefault(u => u.Email == member.Email);
+                var user = _dataContext.Users.FirstOrDefault(u => u.Email == member.Email && u.EmailConfirmed==true);
                 if (user != null){
+                    MemberWorkspace memberExist = _dataContext.MemberWorkspaces.FirstOrDefault(m => m.WorkspaceId == workspaceId && m.UserId == user.Id);
+                    if (memberExist != null)
+                        return new Response{
+                            Message = "Thành viên đã tham gia dự án",
+                            IsSuccess = true
+                        };
                     var url = $"{_configuration["RootUrl"]}api/Workspace/Invite/Confirmed?workspaceId={workspaceId}&userId={user.Id}&role={member.Role}";
 
                     #region html content send email confirmation
@@ -335,12 +342,12 @@ namespace TaskManager.API.Services.Repository
 
                     var send = await _webService.SendEmail(content);
                     return new Response{
-                        Message = "Send email to the user",
+                        Message = "Đã gửi yêu cầu tới thành viên",
                         IsSuccess = true
                     };
                 }
                 return new Response{
-                    Message = "Not Found user",
+                    Message = "Không tìm thấy thành viên",
                     IsSuccess = false
                 };
             }
@@ -395,6 +402,62 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
+        
+        public async Task<Response> RemoveMemberToWorkspaceAsync(int workspaceId, string userId, string memberId)
+        {
+            try{
+                var uwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (uwAdmin != null){
+                    if (uwAdmin.Role == ROLE_ENUM.Owner || uwAdmin.Role == ROLE_ENUM.Admin){
+                        var uwMember = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == memberId);
+                        if (uwMember.Role == ROLE_ENUM.Admin && uwAdmin.Role == ROLE_ENUM.Admin)
+                            return new Response{
+                                Message = $"Bạn không có quyền xóa thành viên",
+                                IsSuccess = false
+                            };
+                        
+                        _dataContext.MemberWorkspaces.Remove(uwMember);
+
+                        // add activation
+                        var activation = new Activation{
+                                                    UserId = userId,
+                                                    WorkspaceId = workspaceId,
+                                                    Content = "Đã xóa thành viên khỏi dự án",
+                                                    CreateAt = DateTime.Now};
+                        await _dataContext.Activations.AddAsync(activation); 
+
+                        var isSave = await SaveChangeAsync();
+                        if(isSave){
+                            var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+                            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                            
+                            return new Response{
+                                Message = "Đã xóa thành viên khỏi dự án",
+                                IsSuccess = true
+                            };
+                        }
+                        return new Response{
+                            Message = $"Không thể xóa thành viên khỏi dự án",
+                            IsSuccess = false
+                        };
+                    }
+
+                    return new Response{
+                        Message = $"Bạn không có quyền xóa thành viên",
+                        IsSuccess = false
+                    };
+                }
+                return new Response{
+                    Message = "Bạn không phải là thành viên dự án",
+                    IsSuccess = false
+                };
+            }
+            catch (Exception e){
+                Console.WriteLine("InviteUserToWorkspaceAsync: " + e.Message);
+                throw e;
+            }
+        }
+        
         public async Task<Response> GetMembersOfWorkspaceAsync(int workspaceId)
         {
             try
@@ -429,7 +492,7 @@ namespace TaskManager.API.Services.Repository
             {
                 var query = @"SELECT u.Id
                               FROM aspnetusers u 
-                              INNER JOIN UserWorkspaces uw on uw.UserId = u.Id
+                              INNER JOIN MemberWorkspaces uw on uw.UserId = u.Id
                               WHERE uw.WorkspaceId = @workspaceId";
 
                 var parameters = new DynamicParameters();
@@ -506,60 +569,6 @@ namespace TaskManager.API.Services.Repository
                     }
                     return new Response{
                         Message = $"Không thể rời dự án",
-                        IsSuccess = false
-                    };
-                }
-                return new Response{
-                    Message = "Bạn không phải là thành viên dự án",
-                    IsSuccess = false
-                };
-            }
-            catch (Exception e){
-                Console.WriteLine("InviteUserToWorkspaceAsync: " + e.Message);
-                throw e;
-            }
-        }
-        public async Task<Response> RemoveMemberToWorkspaceAsync(int workspaceId, string userId, string memberId)
-        {
-            try{
-                var uwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
-                if (uwAdmin != null){
-                    if (uwAdmin.Role == ROLE_ENUM.Owner || uwAdmin.Role == ROLE_ENUM.Admin){
-                        var uwMember = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == memberId);
-                        if (uwMember.Role == ROLE_ENUM.Admin && uwAdmin.Role == ROLE_ENUM.Admin)
-                            return new Response{
-                                Message = $"Bạn không có quyền xóa thành viên",
-                                IsSuccess = false
-                            };
-                        
-                        _dataContext.MemberWorkspaces.Remove(uwMember);
-
-                        // add activation
-                        var activation = new Activation{
-                                                    UserId = userId,
-                                                    WorkspaceId = workspaceId,
-                                                    Content = "Đã xóa thành viên khỏi dự án",
-                                                    CreateAt = DateTime.Now};
-                        await _dataContext.Activations.AddAsync(activation); 
-
-                        var isSave = await SaveChangeAsync();
-                        if(isSave){
-                            var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
-                            
-                            return new Response{
-                                Message = "Rời khỏi dự án thành công",
-                                IsSuccess = true
-                            };
-                        }
-                        return new Response{
-                            Message = $"Không thể rời dự án",
-                            IsSuccess = false
-                        };
-                    }
-
-                    return new Response{
-                        Message = $"Bạn không có quyền xóa thành viên",
                         IsSuccess = false
                     };
                 }

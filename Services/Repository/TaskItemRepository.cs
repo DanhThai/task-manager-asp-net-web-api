@@ -60,6 +60,11 @@ namespace TaskManager.API.Services.Repository
                     };
                     await _dataContext.Activations.AddAsync(activation);
 
+                    var workspace = _dataContext.Workspaces.FirstOrDefault(x => x.Id == workspaceId);
+                    workspace.TaskQuantity += 1;
+                    workspace.IsComplete = false;
+                    _dataContext.Workspaces.Update(workspace);
+
                     isSaved = await SaveChangeAsync();
 
                     // Send changed card to client hub
@@ -70,7 +75,7 @@ namespace TaskManager.API.Services.Repository
 
                     taskItemDto = _mapper.Map<TaskItem, TaskItemDto>(taskItem);
                     return new Response{
-                        Message = "Created task item is successed",
+                        Message = "Tạo nhiệm vụ thành công",
                         Data = new Dictionary<string, object>{
                             ["TaskItem"] = taskItemDto,
                         },
@@ -78,7 +83,7 @@ namespace TaskManager.API.Services.Repository
                     };
                 }
                 return new Response{
-                    Message = "Created task item is is failed",
+                    Message = "Tạo nhiệm vụ thất bại",
                     IsSuccess = false
                 };
             }
@@ -143,13 +148,13 @@ namespace TaskManager.API.Services.Repository
                 // TaskItemDto taskItemDto =await _dapperContext.GetFirstAsync<TaskItemDto>(query, new {taskItemId});
                 if (taskItemDto == null){
                     return new Response{
-                        Message = "Not found task item",
+                        Message = "Nhiệm vụ không tồn tại",
                         IsSuccess = false
                     };
                 }
 
                 return new Response{
-                    Message = "Get task item successfully",
+                    Message = "Lấy chi tiết nhiệm vụ thành công",
                     Data = new Dictionary<string, object>{
                         ["taskItem"] = taskItemDto
                     },
@@ -172,7 +177,7 @@ namespace TaskManager.API.Services.Repository
                 TaskItem taskItem = await _dapperContext.GetFirstAsync<TaskItem>(query, new {taskItemId});
                 if (taskItem == null){
                     return new Response{
-                        Message = "Not found task item",
+                        Message = "Nhiệm vụ không tồn tại",
                         IsSuccess = false
                     };
                 }
@@ -192,12 +197,12 @@ namespace TaskManager.API.Services.Repository
                 var isUpdated = await _dapperContext.UpdateAsync(queryUpdate, parameters);
                 if(isUpdated){
                     return new Response{
-                        Message = "Updated task item is succeed",
+                        Message = "Cập nhật nhiệm vụ thành công",
                         IsSuccess = true
                     };
                 }
                 return new Response{
-                    Message = "Updated task item is failed",
+                    Message = "Cập nhật nhiệm vụ thất bại",
                     IsSuccess = false
                 };
             }
@@ -211,6 +216,15 @@ namespace TaskManager.API.Services.Repository
         public async Task<Response> DeleteTaskItemAsync(int taskItemId, int workspaceId, string userId)
         {
             try{
+                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
+                    x => x.WorkspaceId == workspaceId &&
+                    x.UserId == userId);                 
+                if(mwAdmin.Role == ROLE_ENUM.Member)
+                    return new Response{
+                        Message = "Bạn không được phép xóa nhiệm vụ",
+                        IsSuccess = false
+                    };
+
                 var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == taskItemId);
                 _dataContext.TaskItems.Remove(taskItem);
                 var activation = new Activation{
@@ -225,12 +239,12 @@ namespace TaskManager.API.Services.Repository
 
                 if (isDeleted){
                     return new Response{
-                        Message = "Deleted task item is succeed",
+                        Message = "Xóa nhiệm vụ thành công",
                         IsSuccess = true
                     };
                 }
                 return new Response{
-                    Message = "Deleted task item is failed",
+                    Message = "Không thể xóa nhiệm vụ",
                     IsSuccess = false
                 };
             }
@@ -285,7 +299,7 @@ namespace TaskManager.API.Services.Repository
                 if(isUpdated){
                    
                     return new Response{
-                        Message = "Upload file is succeed",
+                        Message = "Tải tệp thành công",
                         Data = new Dictionary<string, object>{
                             ["fileUrl"] = fileUrl
                         },
@@ -293,7 +307,7 @@ namespace TaskManager.API.Services.Repository
                     };
                 }
                 return new Response{
-                    Message = "Updated file is failed",
+                    Message = "Tải tệp thất bại",
                     IsSuccess = false
                 };
                 
@@ -336,12 +350,12 @@ namespace TaskManager.API.Services.Repository
                     var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
     	            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
                     return new Response{
-                        Message = "Updated file is succeed",
+                        Message = "Cập nhật nhiệm vụ thành công",
                         IsSuccess = true
                     };
                 }
                 return new Response{
-                    Message = "Updated file is failed",
+                    Message = "Cập nhật nhiệm vụ thất bại",
                     IsSuccess = false
                 };
             }
@@ -393,7 +407,7 @@ namespace TaskManager.API.Services.Repository
                     isUpdated = await SaveChangeAsync();
                     if (isUpdated){
                         return new Response{
-                            Message = "Updated task is succeed",
+                            Message = "Di chuyển nhiệm vụ thành công",
                             Data = new Dictionary<string,object>{
                                 ["taskItem"] = _mapper.Map<TaskItem, TaskItemDto>(taskItem),
                             },
@@ -401,37 +415,45 @@ namespace TaskManager.API.Services.Repository
                         };              
                     }
                     return new Response{
-                        Message = "Updated task is failed",                
+                        Message = "Di chuyển nhiệm vụ thất bại",                
                         IsSuccess = false
                     }; 
                 }
-                cardAfter = _dataContext.Cards.FirstOrDefault(c => c.Id == after["cardId"]);
-                cardAfter.TaskOrder = InsertItemByIndex(cardAfter.TaskOrder, taskItemId, after["index"], before["index"]);
+                else{
 
-                _dataContext.Cards.Update(cardAfter);
+                    cardAfter = _dataContext.Cards.FirstOrDefault(c => c.Id == after["cardId"]);
+                    cardAfter.TaskOrder = InsertItemByIndex(cardAfter.TaskOrder, taskItemId, after["index"], before["index"]);
 
-                activation = new Activation{
-                    UserId = userId,
-                    WorkspaceId = workspaceId,
-                    Content = $"Move task {taskItem.Title} in card {cardAfter.Name}",
-                    CreateAt = DateTime.Now
-                };
-                await _dataContext.Activations.AddAsync(activation);
+                    _dataContext.Cards.Update(cardAfter);
 
-                isUpdated = await SaveChangeAsync();
-                if (isUpdated){
+                    activation = new Activation{
+                        UserId = userId,
+                        WorkspaceId = workspaceId,
+                        Content = $"Move task {taskItem.Title} in card {cardAfter.Name}",
+                        CreateAt = DateTime.Now
+                    };
+                    await _dataContext.Activations.AddAsync(activation);
+                    if (cardAfter.Name == "Completed"){
+                        var workspace = _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceId);
+                        workspace.TaskCompleted +=1;
+                        _dataContext.Workspaces.Update(workspace);
+                    }
+
+                    isUpdated = await SaveChangeAsync();
+                    if (isUpdated){
+                        return new Response{
+                            Message = "Di chuyển nhiệm vụ thành công",
+                            Data = new Dictionary<string,object>{
+                                ["taskItem"] = _mapper.Map<TaskItem, TaskItemDto>(taskItem),
+                            },
+                            IsSuccess = true
+                        };              
+                    }
                     return new Response{
-                        Message = "Updated task is succeed",
-                        Data = new Dictionary<string,object>{
-                            ["taskItem"] = _mapper.Map<TaskItem, TaskItemDto>(taskItem),
-                        },
-                        IsSuccess = true
-                    };              
+                        Message = "Di chuyển nhiệm vụ thất bại",                
+                        IsSuccess = false
+                    }; 
                 }
-                return new Response{
-                    Message = "Updated task is failed",                
-                    IsSuccess = false
-                }; 
             }
             catch(Exception e){
                 Console.WriteLine("MoveTaskItemAsync: " + e.Message);
@@ -915,7 +937,7 @@ namespace TaskManager.API.Services.Repository
 
                 var isSaved = await SaveChangeAsync();
                 return new Response{
-                    Message = "Comment in task is succeed",
+                    Message = "Lấy danh sách nhãn thành công",
                     Data = new Dictionary<string,object>{
                         ["Labels"] = labelDtos,
                     },

@@ -15,12 +15,14 @@ namespace TaskManager.API.Data.DTOs
         public string? Background { get; internal set; }
         [Required]
         public int Permission { get; set; }
-        public bool? IsOwner { get; internal set;} = false;
+        public int MyRole { get; internal set;}
         public string CreatorId { get; internal set;}
         public string CreatorName { get; internal set;}
-        public int TaskQuantity { get; set; } = 0;
-        public int TaskCompleted { get; set; } = 0;
-        public bool IsComplete { get; set; } = false;
+        public int TaskQuantity { get; internal set; } = 0;
+        public int TaskCompleted { get; internal set; } = 0;
+        public bool IsComplete { get{
+            return TaskCompleted == TaskQuantity;
+        } }
 
         public List<MemberWorkspaceDto> Members {get; internal set;} = new List<MemberWorkspaceDto>();
         public List<CardDto> Cards {get; internal set;} = new List<CardDto>();
