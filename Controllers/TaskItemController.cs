@@ -11,7 +11,7 @@ namespace TaskManager.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    // [Authorize]
+    [Authorize]
     public class TaskItemController : ControllerBase
     {
         private readonly ITaskItemRepository _taskItemRepository;
