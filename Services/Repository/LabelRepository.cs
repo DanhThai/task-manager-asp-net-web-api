@@ -91,7 +91,7 @@ namespace TaskManager.API.Services.Repository
         {
             try{
                 var labels = _dataContext.Labels.Where(l => l.WorkspaceId == workspaceId).ToList();
-                if(labels == null)
+                if(labels.Count<=0)
                     return new Response
                     {
                         Message = "Không tìm thấy nhãn",

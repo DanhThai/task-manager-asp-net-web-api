@@ -11,6 +11,9 @@ namespace TaskManager.API.Services.IRepository
         public Task<Response> UpdateWorkspaceAsync(WorkspaceDto workspaceDto, string userId);
         public Task<Response> DeleteWorkspaceAsync(int workspaceId);
 
+        public Task<Response> GetCardsOfWorkspaceAsync(int workspaceId);
+
+
         public Task<Response> InviteMemberToWorkspaceAsync(int workspaceId, MemberWorkspaceDto member);
         public Task<Response> ConfirmMemberWorkspaceAsync(int workspaceId, string userId, int role);
         public Task<Response> LeaveOnWorkspaceAsync(int workspaceId, string userId);

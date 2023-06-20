@@ -20,7 +20,7 @@ namespace TaskManager.API.Data.Models
             else
             {
                 var other = (MemberTask)obj;
-                return Id == other.Id && UserId == other.UserId && TaskItemId == other.TaskItemId;
+                return UserId == other.UserId && TaskItemId == other.TaskItemId;
             }
         }
 

@@ -10,7 +10,7 @@ namespace TaskManager.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+
 
     public class WorkspaceController : ControllerBase
     {
@@ -22,6 +22,7 @@ namespace TaskManager.API.Controllers
             _workspaceRepository = workspaceRepository;
         }
 
+        [Authorize]
         [HttpPost]
         public async Task<IActionResult> CreateWorkspace(WorkspaceDto workspaceDto){
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -31,6 +32,20 @@ namespace TaskManager.API.Controllers
             return Ok(rs);
         }
 
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetWorkspaceByUser(){
+            try{
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var rs = await _workspaceRepository.GetWorkspacesByUserAsync(userId); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }   
+
+        [Authorize]
         [HttpGet("{id}", Name = "WorkspaceById")]
         public async Task<IActionResult> GetWorkspaceById(int id){
             if (id != 0)
@@ -47,18 +62,7 @@ namespace TaskManager.API.Controllers
             return BadRequest();
         }
 
-        [HttpGet("me")]
-        public async Task<IActionResult> GetWorkspaceByUser(){
-            try{
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                var rs = await _workspaceRepository.GetWorkspacesByUserAsync(userId); 
-                return Ok(rs);
-            }
-            catch{
-                return BadRequest();
-            }
-        }    
-
+        [Authorize]
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateWorkspaceByUser(WorkspaceDto workspaceDto,int id){
             try{
@@ -73,6 +77,8 @@ namespace TaskManager.API.Controllers
                 return BadRequest();
             }
         }
+
+        [Authorize]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteWorkspaceByUser(int id){
             try{
@@ -85,6 +91,19 @@ namespace TaskManager.API.Controllers
             }
         }
 
+        [Authorize]
+        [HttpGet("{id}/cards")]
+        public async Task<IActionResult> GetCardsByWorkspaceId(int id){
+            try{
+                var rs = await _workspaceRepository.GetCardsOfWorkspaceAsync(id); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
+        }   
+
+        [Authorize]
         #region Member
         [HttpPost("{id}/Invite")]
         public async Task<IActionResult> InviteUserToWorkspace(int id, MemberWorkspaceDto member){
@@ -112,6 +131,7 @@ namespace TaskManager.API.Controllers
             }
         }
 
+        [Authorize]
         [HttpGet("{id}/Members")]
         public async Task<IActionResult> GetMembersById(int id){
             try{
@@ -123,6 +143,7 @@ namespace TaskManager.API.Controllers
             }
         }
 
+        [Authorize]
         [HttpGet("{id}/MembersWithTasks")]
         public async Task<IActionResult> GetMembersWithTaskItemById(int id){
             try{
@@ -135,7 +156,7 @@ namespace TaskManager.API.Controllers
             }
         }
 
-
+        [Authorize]
         [HttpPost("{id}/LeaveWorkspace")]
         public async Task<IActionResult> LeaveOnWorkspace(int id){
             try{
@@ -148,6 +169,7 @@ namespace TaskManager.API.Controllers
             }
         }
 
+        [Authorize]
         [HttpPost("{id}/RemoveMember")]
         public async Task<IActionResult> RemoveMemberToWorkspace(int id, string memberId){
             try{

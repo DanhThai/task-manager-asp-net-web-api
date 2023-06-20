@@ -45,9 +45,9 @@ namespace TaskManager.API.Services.Repository
                 workspace.CreatorId = userId;
                 workspace.CreatorName = userName;
                 workspace.Cards = new List<Card>{
-                    new Card("Todos", CARD_CODE_ENUM.Todos),
-                    new Card("In Progress", CARD_CODE_ENUM.InProgress),
-                    new Card("Completed", CARD_CODE_ENUM.Completed),
+                    new Card("Sẽ làm", CARD_CODE_ENUM.Todos),
+                    new Card("Đang làm", CARD_CODE_ENUM.InProgress),
+                    new Card("Hoàn thành", CARD_CODE_ENUM.Completed),
                 };
                 var wsCreated = await _dataContext.Workspaces.AddAsync(workspace);
 
@@ -59,7 +59,7 @@ namespace TaskManager.API.Services.Repository
 
                 var activation = new Activation{
                                             UserId = userId,
-                                            Content = "Create workspace",
+                                            Content = "Tạo dự án",
                                             CreateAt = DateTime.Now};
                 activation.Workspace = workspace;
                 await _dataContext.Activations.AddAsync(activation);   
@@ -177,7 +177,7 @@ namespace TaskManager.API.Services.Repository
                                 }
                             cardDict.Add(card.Id, currentCard);
                         }
-                        if (taskItem != null){
+                        if (taskItem != null && card.TaskOrder != ""){
                             var index = currentCard.ListTaskIdOrder.IndexOf(taskItem.Id);
                             if (index >= 0)
                                 currentCard.TaskItems[index] = taskItem;
@@ -311,6 +311,29 @@ namespace TaskManager.API.Services.Repository
             return await _dataContext.SaveChangesAsync()>0;
         }
 
+        public async Task<Response> GetCardsOfWorkspaceAsync(int workspaceId){
+            try{
+                var cards = _dataContext.Cards.Where(c => c.WorkspaceId == workspaceId).ToList();
+                if (cards == null) 
+                    return new Response{
+                        Message = "Dự án không tồn tại",
+                        IsSuccess = false
+                    };
+                return new Response{
+                    Message = "Lấy danh sách thẻ thành công",
+                    Data = new Dictionary<string, object>{
+                        ["Card"] = cards
+                    },
+                    IsSuccess = true
+                };
+
+            }
+            catch(Exception e){
+                Console.WriteLine("GetCardsOfWorkspaceAsync: " + e.Message);
+                throw e;
+            }
+        }
+
         #region Member in workspace
         public async Task<Response> InviteMemberToWorkspaceAsync(int workspaceId, MemberWorkspaceDto member)
         {
@@ -323,7 +346,8 @@ namespace TaskManager.API.Services.Repository
                             Message = "Thành viên đã tham gia dự án",
                             IsSuccess = true
                         };
-                    var url = $"{_configuration["RootUrl"]}api/Workspace/Invite/Confirmed?workspaceId={workspaceId}&userId={user.Id}&role={member.Role}";
+                    Console.WriteLine(member.Role);
+                    var url = $"{_configuration["RootUrl"]}api/Workspace/Invite/Confirmed?workspaceId={workspaceId}&userId={user.Id}&role={(int)member.Role}";
 
                     #region html content send email confirmation
                     var body = "<div style=\"width:100%; height:100vh; background-color: #d0e7fb; display: flex; align-items: center; justify-content: center; margin:auto; box-sizing: border-box;\" >"
@@ -507,7 +531,7 @@ namespace TaskManager.API.Services.Repository
                             Ids += ",";
                     }
 
-                    Console.WriteLine(Ids);
+                    Console.WriteLine("member",Ids);
                     query = $@"SELECT u.Id, u.FullName, u.Avatar, u.Email, COUNT(IsComplete) as TaskQuantity, SUM(IsComplete) as CompletedQuantity
                                FROM aspnetusers u
                                LEFT JOIN MemberTasks mt on u.Id = mt.UserId
