@@ -43,9 +43,21 @@ namespace TaskManager.API.Controllers
             catch{
                 return BadRequest();
             }
+        }  
+        [Authorize]
+        [HttpGet("recently")]
+        public async Task<IActionResult> GetWorkspaceRecently(){
+            try{
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var rs = await _workspaceRepository.GetWorkspaceRecentlyAsync(userId); 
+                return Ok(rs);
+            }
+            catch{
+                return BadRequest();
+            }
         }   
 
-        [Authorize]
+        // [Authorize]
         [HttpGet("{id}", Name = "WorkspaceById")]
         public async Task<IActionResult> GetWorkspaceById(int id){
             if (id != 0)

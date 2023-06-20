@@ -97,6 +97,9 @@ namespace TaskManager.API.Services.Repository
                               FROM aspnetusers u
                               INNER JOIN MemberWorkspaces mw on u.Id = mw.UserId 
                               WHERE mw.WorkspaceId = @WorkspaceId;"+
+                            @"SELECT Id, Name, Code, TaskQuantity, TaskOrder
+                              FROM Cards
+                              WHERE WorkspaceId = @WorkspaceId;"+
                             @"SELECT Content, CreateAt, UserId, Avatar, FullName
                               FROM Activations a
                               INNER JOIN aspnetusers u on u.Id = a.UserId 
@@ -123,7 +126,10 @@ namespace TaskManager.API.Services.Repository
                             var isMember = false;
                             foreach (var member in workspaceDto.Members){
                                 if (member.Id == userId)
+                                {
                                     isMember = true;
+                                    workspaceDto.MyRole =  (int)member.Role;
+                                }
                             }
 
                             if(!isMember && workspaceDto.Permission == 1)
@@ -134,11 +140,23 @@ namespace TaskManager.API.Services.Repository
 
                             // Move user to the first of list
                             var index = workspaceDto.Members.FindIndex(x => x.Id == userId);
-                            var temp = workspaceDto.Members[0];
-                            workspaceDto.Members[0] = workspaceDto.Members[index];
-                            workspaceDto.Members[index] = temp;
+                            if (index > 0){
+                                var temp = workspaceDto.Members[0];
+                                workspaceDto.Members[0] = workspaceDto.Members[index];
+                                workspaceDto.Members[index] = temp;
+                            }
                         }
 
+                        workspaceDto.Cards = (await multiResult.ReadAsync<CardDto>()).ToList();
+                        foreach (var card in workspaceDto.Cards)
+                        {
+                            var listTaskItem = card.TaskOrder.ConvertStringToList();
+                            card.ListTaskIdOrder = listTaskItem; 
+                            if(listTaskItem != null)
+                                for(int i = 0; i < listTaskItem.Count; i++){
+                                    card.TaskItems.Add(null);
+                                }
+                        }
                         workspaceDto.Activations = (await multiResult.ReadAsync<ActivationDto>()).ToList();
                         workspaceDto.Schedules = (await multiResult.ReadAsync<ScheduleDto>()).ToList();
                     }
@@ -150,44 +168,98 @@ namespace TaskManager.API.Services.Repository
                     };
                 }
 
-                // Get list Card and Task Item
-                query = @"SELECT c.Id, c.Name, c.Code, c.TaskOrder, c.TaskQuantity,
-                                 t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
-                          FROM Cards c  
-                          LEFT JOIN TaskItems t on c.Id = t.CardId 
-                          WHERE c.WorkspaceId = @WorkspaceId;";
+                // // Get list Card and Task Item
+                // query = @"SELECT c.Id, c.Name, c.Code, c.TaskOrder, c.TaskQuantity,
+                //                  t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
+                //           FROM Cards c  
+                //           LEFT JOIN TaskItems t on c.Id = t.CardId 
+                //           WHERE c.WorkspaceId = @WorkspaceId;";
+
+                // parameters = new DynamicParameters();
+                // parameters.Add("WorkspaceId", workspaceId, DbType.Int32);  
+
+                // var cardDict = new Dictionary<int, CardDto>();
+                // using (var connection = _dapperContext.CreateConnection())
+                // {
+                //     var multiResult = await connection.QueryAsync<CardDto,TaskItemDto,CardDto>(
+                //     query, (card, taskItem)=>{
+                //         if(!cardDict.TryGetValue(card.Id, out var currentCard)){
+                //             var listTaskItem = card.TaskOrder.ConvertStringToList();
+                //             currentCard = card;
+                //             currentCard.ListTaskIdOrder = listTaskItem;
+
+                //             // create list task item = null 
+                //             if(listTaskItem != null)
+                //                 for(int i = 0; i < listTaskItem.Count; i++){
+                //                     currentCard.TaskItems.Add(null);
+                //                 }
+                //             cardDict.Add(card.Id, currentCard);
+                //         }
+                //         if (taskItem != null && card.TaskOrder != ""){
+                //             var index = currentCard.ListTaskIdOrder.IndexOf(taskItem.Id);
+                //             if (index >= 0)
+                //                 currentCard.TaskItems[index] = taskItem;
+                //         }
+                //         return currentCard;
+                //     }, 
+                //     parameters);
+                // }
+                // workspaceDto.Cards = cardDict.Values.ToList();
+
+                // Get list member and Task Item
+                query = @"SELECT t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
+                                ,m.UserId, m.FullName, m.Avatar, m.Email, m.TaskItemId
+                          FROM 
+                          (
+                            SELECT t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity, c.WorkspaceId
+                            FROM TaskItems t  
+                            INNER JOIN Cards c on c.Id = t.CardId 
+                          ) as t 
+                          LEFT JOIN 
+                          (
+                            SELECT u.Id as UserId, u.FullName, u.Avatar, u.Email, mt.TaskItemId
+                            FROM aspnetusers u  
+                            INNER JOIN MemberTasks mt on mt.UserId = u.Id  
+                          ) as m on m.TaskItemId = t.Id
+                          WHERE t.WorkspaceId = @WorkspaceId;";
 
                 parameters = new DynamicParameters();
                 parameters.Add("WorkspaceId", workspaceId, DbType.Int32);  
 
-                var cardDict = new Dictionary<int, CardDto>();
+                var taskItemDict = new Dictionary<int, TaskItemDto>();
                 using (var connection = _dapperContext.CreateConnection())
                 {
-                    var multiResult = await connection.QueryAsync<CardDto,TaskItemDto,CardDto>(
-                    query, (card, taskItem)=>{
-                        if(!cardDict.TryGetValue(card.Id, out var currentCard)){
-                            var listTaskItem = card.TaskOrder.ConvertStringToList();
-                            currentCard = card;
-                            currentCard.ListTaskIdOrder = listTaskItem;
-
-                            // create list task item = null 
-                            if(listTaskItem != null)
-                                for(int i = 0; i < listTaskItem.Count; i++){
-                                    currentCard.TaskItems.Add(null);
-                                }
-                            cardDict.Add(card.Id, currentCard);
+                    var multiResult = await connection.QueryAsync<TaskItemDto,MemberTaskDto,TaskItemDto>(
+                    query, (taskItem, memberTask)=>{
+                        if(!taskItemDict.TryGetValue(taskItem.Id, out var currenttaskItem)){
+                            currenttaskItem = taskItem;
+                            taskItemDict.Add(taskItem.Id, currenttaskItem);
                         }
-                        if (taskItem != null && card.TaskOrder != ""){
-                            var index = currentCard.ListTaskIdOrder.IndexOf(taskItem.Id);
-                            if (index >= 0)
-                                currentCard.TaskItems[index] = taskItem;
-
+                        if (memberTask != null){
+                            currenttaskItem.Members.Add(memberTask);
                         }
-                        return currentCard;
+                        return currenttaskItem;
                     }, 
-                    parameters);
+                    parameters
+                    , splitOn: "UserId");
                 }
-                workspaceDto.Cards = cardDict.Values.ToList();
+
+                // Add task item to card
+                foreach (var taskItem in taskItemDict.Values){
+                    foreach (var card in workspaceDto.Cards){
+                        if(card.TaskQuantity > 0)
+                        {
+                            var index = card.ListTaskIdOrder.IndexOf(taskItem.Id);
+                            if (index >= 0)
+                            {
+                                card.TaskItems[index] = taskItem;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+
                 
                 return new Response{
                     Message = "Lấy dự án thành công",
@@ -202,7 +274,36 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
-
+        public async Task<Response> GetWorkspaceRecentlyAsync(string userId)
+        {
+            try{
+                // var workspaces =  _dataContext.Workspaces.Where( w => w.Users.FirstOrDefault(u => u.Id == userId) != null).ToList();
+                var query = @"SELECT w.Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted, mw.Role as MyRole
+                              FROM Workspaces w
+                              INNER JOIN MemberWorkspaces mw on w.Id = mw.WorkspaceId
+                              WHERE mw.UserId = @userId
+                              ORDER BY w.VisitDate DESC
+                              LIMIT 5";
+                var parameters = new DynamicParameters();
+                parameters.Add("userId", userId, DbType.String);             
+                List<WorkspaceDto> workspaceDtos = await _dapperContext.GetListAsync<WorkspaceDto>(query, parameters);
+                
+                // List<WorkspaceDto> workspaceDtos = _mapper.Map<List<Workspace>, List<WorkspaceDto>>(workspaces);
+                if (workspaceDtos == null)
+                    workspaceDtos = new List<WorkspaceDto>();
+                return new Response{
+                        Message = "Lấy danh sách dự án thành công",
+                        Data = new Dictionary<string, object>{
+                            ["Workspaces"] = workspaceDtos
+                        },
+                        IsSuccess = true
+                    };
+            }
+            catch (Exception e){
+                Console.WriteLine("GetWorkspacesByUserAsync: " + e.Message);
+                throw e;
+            }
+        }
         public async Task<Response> GetWorkspacesByUserAsync(string userId)
         {
             try{
@@ -318,7 +419,8 @@ namespace TaskManager.API.Services.Repository
                     return new Response{
                         Message = "Dự án không tồn tại",
                         IsSuccess = false
-                    };
+                    }; 
+                cards.RemoveAt(2);
                 return new Response{
                     Message = "Lấy danh sách thẻ thành công",
                     Data = new Dictionary<string, object>{
@@ -606,6 +708,8 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
+
+
         #endregion
 
 

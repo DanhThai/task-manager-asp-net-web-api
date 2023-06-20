@@ -27,13 +27,12 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-
                 var subtask = _mapper.Map<SubtaskDto, Subtask>(subtaskDto);
                 var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == subtaskDto.TaskItemId);
                 if (taskItem == null)
                     return new Response
                     {
-                        Message = "Created subtask is failed",
+                        Message = "Không tìm thấy nhiệm vụ",
                         IsSuccess = false
                     };
                 _dataContext.Subtasks.Add(subtask);
@@ -45,7 +44,7 @@ namespace TaskManager.API.Services.Repository
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Create subtask {subtask.Name} in task {taskItem.Title}",
+                    Content = $"Tạo nhiệm vụ con {subtask.Name} ở trong nhiệm vụ {taskItem.Title}",
                     CreateAt = DateTime.Now
                 };
                 await _dataContext.Activations.AddAsync(activation);
@@ -59,7 +58,7 @@ namespace TaskManager.API.Services.Repository
                     subtaskDto = _mapper.Map<Subtask, SubtaskDto>(subtask);
                     return new Response
                     {
-                        Message = "Created subtask is succeed",
+                        Message = "Tạo nhiệm vụ con thành công",
                         Data = new Dictionary<string, object>{
                             ["Subtask"] = subtaskDto,
                         }, 
@@ -68,7 +67,7 @@ namespace TaskManager.API.Services.Repository
                 }
                 return new Response
                 {
-                    Message = "Created checklist is failed",
+                    Message = "Tạo nhiệm vụ con thất bại",
                     IsSuccess = false
                 };
             }
@@ -98,7 +97,7 @@ namespace TaskManager.API.Services.Repository
                     {
                         UserId = userId,
                         WorkspaceId = workspaceId,
-                        Content = $"Remove subtask {subtask.Name}",
+                        Content = $"Xóa nhiệm vụ con {subtask.Name} trong {taskItem.Title}",
                         CreateAt = DateTime.Now
                     };
                     await _dataContext.Activations.AddAsync(activation);
@@ -111,19 +110,19 @@ namespace TaskManager.API.Services.Repository
 
                         return new Response
                         {
-                            Message = "Delete subtask is succeed",
+                            Message = "Xóa nhiệm vụ con thành công",
                             IsSuccess = true
                         };
                     }
                     return new Response
                     {
-                        Message = "Remove checklist is failed",
+                        Message = "Xóa nhiệm vụ con thất bại",
                         IsSuccess = false
                     };
                 }
                 return new Response
                 {
-                    Message = "Created checklist is failed",
+                    Message = "Không tìm thấy nhiệm vụ con",
                     IsSuccess = false
                 };
 
@@ -145,6 +144,12 @@ namespace TaskManager.API.Services.Repository
             try
             {
                 var subtask = _dataContext.Subtasks.FirstOrDefault(t => t.Id == subtaskId);
+                if (subtask == null)
+                    return new Response
+                    {
+                        Message = "Không tìm thấy nhiệm vụ con.",
+                        IsSuccess = false
+                    };
                 patchSubtask.ApplyTo(subtask);
 
                 if (patchSubtask.Operations[0].path.Contains("Status")){
@@ -165,13 +170,13 @@ namespace TaskManager.API.Services.Repository
                 {
                     return new Response
                     {
-                        Message = "Update subtask is succeed",
+                        Message = "Cập nhật nhiệm vụ con thành công",
                         IsSuccess = true
                     };
                 }
                 return new Response
                 {
-                    Message = "Remove subtask is failed",
+                    Message = "Cập nhật nhiệm vụ con thất bại",
                     IsSuccess = false
                 };
 
@@ -193,6 +198,12 @@ namespace TaskManager.API.Services.Repository
             try
             {
                 var subtask = _dataContext.Subtasks.FirstOrDefault(t => t.Id == subtaskId);
+                if (subtask == null)
+                    return new Response
+                    {
+                        Message = "Không tìm thấy nhiệm vụ con.",
+                        IsSuccess = false
+                    };
                 subtask.Name = subtaskDto.Name;
 
                 _dataContext.Subtasks.Update(subtask);
@@ -202,13 +213,13 @@ namespace TaskManager.API.Services.Repository
                 {
                     return new Response
                     {
-                        Message = "Update subtask is succeed",
+                        Message = "Cập nhật nhiệm vụ con thành công.",
                         IsSuccess = true
                     };
                 }
                 return new Response
                 {
-                    Message = "Remove subtask is failed",
+                    Message = "Cập nhật nhiệm vụ con thất bại.",
                     IsSuccess = false
                 };
 

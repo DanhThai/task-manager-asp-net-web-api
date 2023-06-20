@@ -68,6 +68,7 @@ namespace TaskManager.API.Services.Repository
                     var workspace = _dataContext.Workspaces.FirstOrDefault(x => x.Id == workspaceId);
                     workspace.TaskQuantity += 1;
                     workspace.IsComplete = false;
+                    workspace.VisitDate = DateTime.Now;
                     _dataContext.Workspaces.Update(workspace);
 
                     isSaved = await SaveChangeAsync();
@@ -269,6 +270,8 @@ namespace TaskManager.API.Services.Repository
 
                 var workspace = _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceId);
                 workspace.TaskQuantity -= 1;
+                workspace.VisitDate = DateTime.Now;
+
                 if (card.Code == CARD_CODE_ENUM.Completed)
                 {
                     workspace.TaskCompleted -= 1;
@@ -402,7 +405,7 @@ namespace TaskManager.API.Services.Repository
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Edit task {taskItem.Title}",
+                    Content = $"Chỉnh sửa nhiệm vụ {taskItem.Title}",
                     CreateAt = DateTime.Now
                 };
                 await _dataContext.Activations.AddAsync(activation);
@@ -497,6 +500,7 @@ namespace TaskManager.API.Services.Repository
                     {
                         var workspace = _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceId);
                         workspace.TaskCompleted -= 1;
+                        workspace.VisitDate = DateTime.Now;
                         _dataContext.Workspaces.Update(workspace);
                     }
 
@@ -540,7 +544,7 @@ namespace TaskManager.API.Services.Repository
                     {
                         UserId = userId,
                         WorkspaceId = workspaceId,
-                        Content = $"Move task {taskItem.Title} in card {cardAfter.Name}",
+                        Content = $"Di chuyển nhiệm vụ {taskItem.Title} trong thẻ {cardAfter.Name}",
                         CreateAt = DateTime.Now
                     };
                     await _dataContext.Activations.AddAsync(activation);
@@ -949,6 +953,9 @@ namespace TaskManager.API.Services.Repository
                 comment.UpdateAt = DateTime.Now;
                 _dataContext.Comments.Add(comment);
 
+                taskItem.CommentQuantity +=1;
+                _dataContext.TaskItems.Update(taskItem);
+
                 var activation = new Activation
                 {
                     UserId = userId,
@@ -1053,7 +1060,12 @@ namespace TaskManager.API.Services.Repository
                         IsSuccess = false
                     };
 
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == comment.TaskItemId);
+                taskItem.CommentQuantity -= 1;
+                _dataContext.TaskItems.Update(taskItem);
                 _dataContext.Comments.Remove(comment);
+
+                
 
                 var isSaved = await SaveChangeAsync();
 

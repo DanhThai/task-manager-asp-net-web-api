@@ -21,7 +21,7 @@ namespace TaskManager.API.Data.DTOs
         public int TaskQuantity { get; internal set; } = 0;
         public int TaskCompleted { get; internal set; } = 0;
         public bool IsComplete { get{
-            return TaskCompleted == TaskQuantity;
+            return TaskCompleted == TaskQuantity && TaskQuantity != 0;
         } }
 
         public List<MemberWorkspaceDto> Members {get; internal set;} = new List<MemberWorkspaceDto>();
