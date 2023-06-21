@@ -171,6 +171,7 @@ namespace TaskManager.API.Services.Repository
                 // Get list member and Task Item
                 query = @"SELECT t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
                                 ,m.UserId, m.FullName, m.Avatar, m.Email, m.TaskItemId
+		                        ,l.Id, l.Name, l.Color, l.WorkspaceId
                           FROM 
                           (
                             SELECT t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity, c.WorkspaceId
@@ -183,6 +184,13 @@ namespace TaskManager.API.Services.Repository
                             FROM aspnetusers u  
                             INNER JOIN MemberTasks mt on mt.UserId = u.Id  
                           ) as m on m.TaskItemId = t.Id
+                          LEFT JOIN 
+                          (
+                            SELECT l.Id, Name, Color, WorkspaceId, tl.TaskItemId
+                            FROM Labels l
+                            INNER JOIN TaskLabels tl on tl.LabelId = l.Id 
+                          ) as l on l.TaskItemId = t.id
+
                           WHERE t.WorkspaceId = @WorkspaceId;";
 
                 parameters = new DynamicParameters();
@@ -191,19 +199,22 @@ namespace TaskManager.API.Services.Repository
                 var taskItemDict = new Dictionary<int, TaskItemDto>();
                 using (var connection = _dapperContext.CreateConnection())
                 {
-                    var multiResult = await connection.QueryAsync<TaskItemDto,MemberTaskDto,TaskItemDto>(
-                    query, (taskItem, memberTask)=>{
+                    var multiResult = await connection.QueryAsync<TaskItemDto,MemberTaskDto, LabelDto,TaskItemDto>(
+                    query, (taskItem, memberTask, label)=>{
                         if(!taskItemDict.TryGetValue(taskItem.Id, out var currenttaskItem)){
                             currenttaskItem = taskItem;
                             taskItemDict.Add(taskItem.Id, currenttaskItem);
                         }
-                        if (memberTask != null){
+                        if (memberTask != null && workspaceDto.Members.FirstOrDefault(m => m.Id == memberTask.UserId) != null){
                             currenttaskItem.Members.Add(memberTask);
+                        }
+                        if (label != null){
+                            currenttaskItem.Labels.Add(label);
                         }
                         return currenttaskItem;
                     }, 
                     parameters
-                    , splitOn: "UserId");
+                    , splitOn: "UserId, Id");
                 }
 
                 // Add task item to card
@@ -687,8 +698,6 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
-
-
         #endregion
 
 

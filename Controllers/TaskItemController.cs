@@ -126,11 +126,15 @@ namespace TaskManager.API.Controllers
             }
         }
 
-        [HttpGet("Member")]
-        public async Task<IActionResult> GetTaskItemByMember(string memberId, PRIORITY_ENUM? priority, bool? isComplete, bool? desc){
+        [HttpGet("ByMember")]
+        public async Task<IActionResult> GetTaskItemByMember(string memberId, int workspaceId, PRIORITY_ENUM? priority, bool? isComplete, bool? desc){
             try{
-                var rs = await _taskItemRepository.GetTasksItemByMemberAsync(memberId, priority, isComplete, desc); 
-                return Ok(rs);
+                if(memberId != null || workspaceId > 0){
+                    var rs = await _taskItemRepository.GetTasksItemByMemberAsync(memberId, workspaceId, priority, isComplete, desc); 
+                    return Ok(rs);
+                }
+                return BadRequest();
+
             }
             catch{
                 return BadRequest();

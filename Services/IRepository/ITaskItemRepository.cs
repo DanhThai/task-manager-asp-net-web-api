@@ -16,7 +16,7 @@ namespace TaskManager.API.Services.IRepository
         public Task<Response> UploadFileAsync(int taskItemId, int WorkspaceId, string userId, IFormFile file);
         public Task<Response> DeleteTaskItemAsync(int taskItemId, int WorkspaceId, string userId);
 
-        public Task<Response> GetTasksItemByMemberAsync(string memberId, PRIORITY_ENUM? priority, bool? isComplete, bool? desc);
+        public Task<Response> GetTasksItemByMemberAsync(string memberId, int workspaceId, PRIORITY_ENUM? priority, bool? isComplete, bool? desc);
         public Task<Response> AssignMemberAsync(int taskItemId, int workspaceId, string userId, List<MemberTaskDto> memberTaskDto);
         public Task<Response> ExtendDueDateByMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);
         public Task<Response> AcceptExtendDueDateAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto);

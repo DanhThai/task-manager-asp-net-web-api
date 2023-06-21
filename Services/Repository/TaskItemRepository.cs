@@ -596,16 +596,17 @@ namespace TaskManager.API.Services.Repository
         }
 
         #region Member is assigned in task item
-        public async Task<Response> GetTasksItemByMemberAsync(string memberId, PRIORITY_ENUM? priority, bool? isComplete, bool? desc)
+        public async Task<Response> GetTasksItemByMemberAsync(string memberId, int workspaceId, PRIORITY_ENUM? priority, bool? isComplete, bool? desc)
         {
             try
             {
                 var query = @"SELECT u.Id, FullName, Avatar, Email, mw.Role
                               FROM aspnetusers u
                               INNER JOIN MemberWorkspaces mw on mw.UserId = u.Id
-                              WHERE u.Id = @memberId";
+                              WHERE u.Id = @memberId AND mw.WorkspaceId = @workspaceId";
                 var parameters = new DynamicParameters();
                 parameters.Add("memberId", memberId, DbType.String);
+                parameters.Add("workspaceId", workspaceId, DbType.String);
 
                 var member = await _dapperContext.GetFirstAsync<MemberWorkspaceDto>(query, parameters);
                 if (member == null)
@@ -615,12 +616,19 @@ namespace TaskManager.API.Services.Repository
                         IsSuccess = false
                     };
 
-                query = @"SELECT t.Id, Title, Priority, DueDate, IsComplete, SubtaskQuantity, SubtaskCompleted,
-                                 u.Id as CreatorId, u.FullName, u.Avatar, u.Email
-                          FROM TaskItems t 
-                          INNER JOIN aspnetusers u on u.Id = t.CreatorId
-                          INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
-                          WHERE mt.UserId = @memberId";
+
+                query = @"SELECT t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
+		                    ,l.Id, l.Name, l.Color, l.WorkspaceId
+                        FROM TaskItems t 
+                        INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
+                        LEFT JOIN 
+                        (
+                            SELECT l.Id, Name, Color, WorkspaceId, tl.TaskItemId
+                            FROM Labels l
+                            INNER JOIN TaskLabels tl on tl.LabelId = l.Id 
+                        ) as l on l.TaskItemId = t.id
+
+                        WHERE mt.UserId = @memberId";
                 // Filter by priority and isComplete
                 if (priority != null)
                 {
@@ -634,14 +642,35 @@ namespace TaskManager.API.Services.Repository
                 }
 
 
-                List<TaskItemDto> taskItemDtos = await _dapperContext.GetListAsync<TaskItemDto>(query, parameters);
-                if (taskItemDtos == null)
-                    return new Response
-                    {
-                        Message = "Thành viên chưa được gán task",
-                        IsSuccess = false
-                    };
+                // List<TaskItemDto> taskItemDtos = await _dapperContext.GetListAsync<TaskItemDto>(query, parameters);
+                // if (taskItemDtos == null)
+                //     return new Response
+                //     {
+                //         Message = "Thành viên chưa được gán task",
+                //         IsSuccess = false
+                //     };
 
+                parameters = new DynamicParameters();
+                parameters.Add("memberId", memberId, DbType.String);  
+
+                var taskItemsDict = new Dictionary<int, TaskItemDto>();
+                using (var connection = _dapperContext.CreateConnection())
+                {
+                    var multiResult = await connection.QueryAsync<TaskItemDto,LabelDto,TaskItemDto>(
+                    query, (taskItem, label)=>{
+                        if(!taskItemsDict.TryGetValue(taskItem.Id, out var currenttaskItem)){
+                            currenttaskItem = taskItem;
+                            taskItemsDict.Add(taskItem.Id, currenttaskItem);
+                        }
+                        if (label != null){
+                            currenttaskItem.Labels.Add(label);
+                        }
+                        return currenttaskItem;
+                    }, 
+                    parameters
+                    , splitOn: "Id");
+                }
+                var taskItemDtos = taskItemsDict.Values.ToList();
                 // Sorting 
                 if (desc != null)
                 {

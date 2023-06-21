@@ -57,7 +57,7 @@ namespace TaskManager.API.Controllers
             }
         }   
 
-        // [Authorize]
+        [Authorize]
         [HttpGet("{id}", Name = "WorkspaceById")]
         public async Task<IActionResult> GetWorkspaceById(int id){
             if (id != 0)
@@ -155,7 +155,7 @@ namespace TaskManager.API.Controllers
             }
         }
 
-        // [Authorize]
+        [Authorize]
         [HttpGet("{id}/MembersWithTasks")]
         public async Task<IActionResult> GetMembersWithTaskItemById(int id){
             try{
