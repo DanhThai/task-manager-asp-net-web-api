@@ -155,7 +155,7 @@ namespace TaskManager.API.Controllers
             }
         }
 
-        [Authorize]
+        // [Authorize]
         [HttpGet("{id}/MembersWithTasks")]
         public async Task<IActionResult> GetMembersWithTaskItemById(int id){
             try{

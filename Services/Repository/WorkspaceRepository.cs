@@ -168,44 +168,6 @@ namespace TaskManager.API.Services.Repository
                     };
                 }
 
-                // // Get list Card and Task Item
-                // query = @"SELECT c.Id, c.Name, c.Code, c.TaskOrder, c.TaskQuantity,
-                //                  t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
-                //           FROM Cards c  
-                //           LEFT JOIN TaskItems t on c.Id = t.CardId 
-                //           WHERE c.WorkspaceId = @WorkspaceId;";
-
-                // parameters = new DynamicParameters();
-                // parameters.Add("WorkspaceId", workspaceId, DbType.Int32);  
-
-                // var cardDict = new Dictionary<int, CardDto>();
-                // using (var connection = _dapperContext.CreateConnection())
-                // {
-                //     var multiResult = await connection.QueryAsync<CardDto,TaskItemDto,CardDto>(
-                //     query, (card, taskItem)=>{
-                //         if(!cardDict.TryGetValue(card.Id, out var currentCard)){
-                //             var listTaskItem = card.TaskOrder.ConvertStringToList();
-                //             currentCard = card;
-                //             currentCard.ListTaskIdOrder = listTaskItem;
-
-                //             // create list task item = null 
-                //             if(listTaskItem != null)
-                //                 for(int i = 0; i < listTaskItem.Count; i++){
-                //                     currentCard.TaskItems.Add(null);
-                //                 }
-                //             cardDict.Add(card.Id, currentCard);
-                //         }
-                //         if (taskItem != null && card.TaskOrder != ""){
-                //             var index = currentCard.ListTaskIdOrder.IndexOf(taskItem.Id);
-                //             if (index >= 0)
-                //                 currentCard.TaskItems[index] = taskItem;
-                //         }
-                //         return currentCard;
-                //     }, 
-                //     parameters);
-                // }
-                // workspaceDto.Cards = cardDict.Values.ToList();
-
                 // Get list member and Task Item
                 query = @"SELECT t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.CardId, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
                                 ,m.UserId, m.FullName, m.Avatar, m.Email, m.TaskItemId
@@ -616,42 +578,59 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                var query = @"SELECT u.Id
+                var query = @"SELECT u.Id, u.FullName, u.Avatar, u.Email, mw.Role
                               FROM aspnetusers u 
-                              INNER JOIN MemberWorkspaces uw on uw.UserId = u.Id
-                              WHERE uw.WorkspaceId = @workspaceId";
+                              INNER JOIN MemberWorkspaces mw on mw.UserId = u.Id
+                              WHERE mw.WorkspaceId = @workspaceId";
 
                 var parameters = new DynamicParameters();
                 parameters.Add("workspaceId", workspaceId, DbType.Int32);  
-                List<string> memberIds = await _dapperContext.GetListAsync<string>(query, parameters);
-                var n = memberIds.Count;
+                List<MemberWorkspaceDto> membersWorkspace = await _dapperContext.GetListAsync<MemberWorkspaceDto>(query, parameters);
+                var n = membersWorkspace.Count;
                 if(n >0){
                     string Ids = "";
                     for(int i=0; i< n; i++){
-                        Ids += $"'{memberIds[i]}'";
+                        Ids += $"'{membersWorkspace[i].Id}'";
                         if (i < n -1)
                             Ids += ",";
                     }
 
-                    Console.WriteLine("member",Ids);
-                    query = $@"SELECT u.Id, u.FullName, u.Avatar, u.Email, COUNT(IsComplete) as TaskQuantity, SUM(IsComplete) as CompletedQuantity
-                               FROM aspnetusers u
-                               LEFT JOIN MemberTasks mt on u.Id = mt.UserId
+                    query = $@"SELECT mt.UserId as Id, COUNT(IsComplete) as TaskQuantity, SUM(IsComplete) as CompletedQuantity
+                               FROM MemberTasks mt
                                LEFT JOIN TaskItems t on t.Id = mt.TaskItemId
-                               WHERE u.Id in ({Ids})
-                               GROUP BY u.Id";
+                               WHERE mt.UserId in ({Ids})
+                               GROUP BY mt.UserId";
 
-                    List<MemberWorkspaceDto> members = await _dapperContext.GetListAsync<MemberWorkspaceDto>(query);
-                    // Move user to the first of list
-                    var index = members.FindIndex(x => x.Id == userId);
-                    var temp = members[0];
-                    members[0] = members[index];
-                    members[index] = temp;
+                    List<MemberWorkspaceDto> membersWithTask = await _dapperContext.GetListAsync<MemberWorkspaceDto>(query);
+                    
+                    for (int i = 0; i < membersWorkspace.Count; i++)
+                    {
+                        if (i>0 && membersWorkspace[i].Id == userId)
+                        {
+                            var temp = membersWorkspace[0];
+                            membersWorkspace[0] = membersWorkspace[i];
+                            membersWorkspace[i] = temp;
+                            continue;
+                        }
+                        var memberTask = membersWithTask.FirstOrDefault(
+                            item => item.Id == membersWorkspace[i].Id
+                        );
+                        if (memberTask != null){
+                            membersWorkspace[i].CompletedQuantity = memberTask.CompletedQuantity;
+                            membersWorkspace[i].TaskQuantity = memberTask.TaskQuantity;
+                        }
+                    }
+
+                    // // Move user to the first of list
+                    // var index = membersWorkspace.FindIndex(x => x.Id == userId);
+                    // var temp = membersWorkspace[0];
+                    // membersWorkspace[0] = membersWorkspace[index];
+                    // membersWorkspace[index] = temp;
                     
                     return new Response{
                         Message = "Lấy danh sách thành viên thành công",
                         Data = new Dictionary<string, object>{
-                            ["Members"] = members
+                            ["Members"] = membersWorkspace
                         },
                         IsSuccess = true
                     };
