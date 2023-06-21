@@ -31,7 +31,7 @@ namespace TaskManager.API.Data.DTOs
         [Required]
         public int CardId { get; set; }
 
-        public string CreatorId { get; set; }
+        public string CreatorId { get; internal set; }
         public string FullName { get; internal set; }
         public string Email { get; internal set; }
         public string Avatar { get; internal set; }

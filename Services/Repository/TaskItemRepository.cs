@@ -674,10 +674,10 @@ namespace TaskManager.API.Services.Repository
             try
             {
                 // Check user have permission to assign
-                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
-                    x => x.WorkspaceId == workspaceId &&
-                    x.UserId == userId);
-                if (mwAdmin.Role == ROLE_ENUM.Member)
+                var creator = _dataContext.TaskItems.FirstOrDefault(
+                    x => x.Id == taskItemId &&
+                    x.CreatorId == userId);
+                if (creator == null)
                     return new Response
                     {
                         Message = "Bạn không được phép gán thành viên",
@@ -721,60 +721,10 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        public async Task<Response> RemoveMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto)
-        {
-            try
-            {
-                var memberTask = _dataContext.MemberTasks.FirstOrDefault(
-                    t => t.TaskItemId == memberTaskDto.TaskItemId
-                    && t.UserId == memberTaskDto.UserId);
-                if (memberTask == null)
-                    return new Response
-                    {
-                        Message = "Member is not found",
-                        IsSuccess = false
-                    };
-
-                _dataContext.MemberTasks.Remove(memberTask);
-
-                var isSaved = await SaveChangeAsync();
-
-                if (isSaved)
-                {
-                    return new Response
-                    {
-                        Message = "Deleted member to task is succeed",
-                        IsSuccess = true
-                    };
-                }
-                return new Response
-                {
-                    Message = "Deleted member to task is failed",
-                    IsSuccess = false
-                };
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("RemoveMemberAsync: " + e.Message);
-                throw e;
-            }
-        }
-
         public async Task<Response> ExtendDueDateByMemberAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto)
         {
             try
             {
-                // Check user have permission to assign
-                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
-                    x => x.WorkspaceId == workspaceId &&
-                    x.UserId == userId);
-                if (mwAdmin.Role != ROLE_ENUM.Member)
-                    return new Response
-                    {
-                        Message = "Chức này chỉ giành cho thành viên",
-                        IsSuccess = false
-                    };
-
                 var memberTask = _dataContext.MemberTasks.FirstOrDefault(
                     m => m.TaskItemId == memberTaskDto.TaskItemId
                     && m.UserId == userId);
@@ -830,35 +780,43 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                // Check user have permission to assign
-                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
-                    x => x.WorkspaceId == workspaceId &&
-                    x.UserId == userId);
-                if (mwAdmin.Role == ROLE_ENUM.Member)
+                
+
+                var memberTask = _dataContext.MemberTasks.FirstOrDefault(
+                    m => m.TaskItemId == memberTaskDto.TaskItemId
+                    && m.UserId == memberTaskDto.UserId);
+
+                if (memberTask == null)
                     return new Response
                     {
                         Message = "Bạn không được phép thực hiện chức năng này",
                         IsSuccess = false
                     };
 
-                var memberTask = _dataContext.MemberTasks.FirstOrDefault(
-                    m => m.TaskItemId == memberTaskDto.TaskItemId
-                    && m.UserId == memberTaskDto.UserId);
+                // Check user have permission to assign
+                var creatorTask = _dataContext.TaskItems.FirstOrDefault(
+                    x => x.Id == memberTask.TaskItemId &&
+                    x.CreatorId == userId);
+                if (creatorTask == null)
+                    return new Response
+                    {
+                        Message = "Bạn không được phép gán thành viên",
+                        IsSuccess = false
+                    };
 
                 memberTask.ExtendDate = null;
                 memberTask.Requested = false;
 
                 _dataContext.MemberTasks.Update(memberTask);
 
-                var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == memberTaskDto.TaskItemId);
-                taskItem.DueDate = memberTaskDto.ExtendDate;
-                _dataContext.TaskItems.Update(taskItem);
+                creatorTask.DueDate = memberTaskDto.ExtendDate;
+                _dataContext.TaskItems.Update(creatorTask);
 
                 var activation = new Activation
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Chấp nhận yêu cầu gia hạn vào {memberTaskDto.ExtendDate.Value.ToShortDateString()} trong nhiệm vụ {taskItem.Title}",
+                    Content = $"Chấp nhận yêu cầu gia hạn vào {memberTaskDto.ExtendDate.Value.ToString("dd/MM/yyyy H:mm:ss")} trong nhiệm vụ {creatorTask.Title}",
                     CreateAt = DateTime.Now
                 };
                 _dataContext.Activations.Add(activation);
@@ -891,23 +849,30 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                // Check user have permission to assign
-                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
-                    x => x.WorkspaceId == workspaceId &&
-                    x.UserId == userId);
-                if (mwAdmin.Role == ROLE_ENUM.Member)
+                var memberTask = _dataContext.MemberTasks.FirstOrDefault(
+                    m => m.Id == memberTaskId);
+                if (memberTask == null)
                     return new Response
                     {
                         Message = "Bạn không được phép thực hiện chức năng này",
                         IsSuccess = false
                     };
 
-                var memberTask = _dataContext.MemberTasks.FirstOrDefault(
-                    m => m.Id == memberTaskId);
+                // Check user have permission to assign
+                var creatorTask = _dataContext.TaskItems.FirstOrDefault(
+                    x => x.Id == memberTask.TaskItemId &&
+                    x.CreatorId == userId);
 
+                if (creatorTask == null)
+                    return new Response
+                    {
+                        Message = "Bạn không được phép gán thành viên",
+                        IsSuccess = false
+                    };
+
+                
                 memberTask.ExtendDate = null;
                 memberTask.Requested = false;
-
                 _dataContext.MemberTasks.Update(memberTask);
 
                 var isSaved = await SaveChangeAsync();

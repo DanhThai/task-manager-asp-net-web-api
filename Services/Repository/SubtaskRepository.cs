@@ -152,7 +152,7 @@ namespace TaskManager.API.Services.Repository
                     };
                 patchSubtask.ApplyTo(subtask);
 
-                if (patchSubtask.Operations[0].path.Contains("Status")){
+                if (patchSubtask.Operations[0].path.Contains("status")){
                     var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == subtask.TaskItemId);
                     if((bool)patchSubtask.Operations[0].value){
                         taskItem.SubtaskCompleted += 1;
