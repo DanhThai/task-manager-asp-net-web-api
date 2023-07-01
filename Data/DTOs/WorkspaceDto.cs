@@ -7,7 +7,7 @@ namespace TaskManager.API.Data.DTOs
     public class WorkspaceDto
     {
         [Key]
-        public int? Id { get; internal set; }
+        public int Id { get; internal set; }
         [Required, MaxLength(50)]
         public string Title { get; set; }
         public string? Description { get; set; }
@@ -15,7 +15,7 @@ namespace TaskManager.API.Data.DTOs
         public string? Background { get; internal set; }
         [Required]
         public int Permission { get; set; }
-        public int MyRole { get; internal set;}
+        public int? MyRole { get; internal set;} = null;
         public string CreatorId { get; internal set;}
         public string CreatorName { get; internal set;}
         public int TaskQuantity { get; internal set; } = 0;

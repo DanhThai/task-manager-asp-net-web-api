@@ -9,6 +9,9 @@ using TaskManager.API.Data.Models;
 using TaskManager.API.Services.IRepository;
 using Microsoft.AspNetCore.WebUtilities;
 using AutoMapper;
+using TaskManager.API.Data;
+using Dapper;
+using System.Data;
 
 namespace TaskManager.API.Services.Repository
 {
@@ -20,6 +23,8 @@ namespace TaskManager.API.Services.Repository
         private readonly IConfiguration _configuration;
         private readonly IWebService _webService;
         private readonly IMapper _mapper;
+        private readonly DapperContext _dapperContext;
+
 
 
         public AccountRepository(SignInManager<Account> signInManager,
@@ -27,7 +32,8 @@ namespace TaskManager.API.Services.Repository
                                  RoleManager<IdentityRole> roleManager,
                                  IConfiguration configuration,
                                  IWebService webService,
-                                 IMapper mapper)
+                                 IMapper mapper,
+                                 DapperContext dapperContext)
         {
             _signInManager = signInManager;
             _userManager = userManager;
@@ -35,6 +41,7 @@ namespace TaskManager.API.Services.Repository
             _configuration = configuration;
             _webService = webService;
             _mapper = mapper;
+            _dapperContext = dapperContext;
         }
 
         private JwtSecurityToken GetToken(List<Claim> authClaims)
@@ -199,40 +206,24 @@ namespace TaskManager.API.Services.Repository
                         Email = user.Email,
                         UserName = user.Email,
                         FullName = user.FullName,
+                        EmailConfirmed = true
                     };
                     var rs = await _userManager.CreateAsync(account, user.Password);
                     await _userManager.AddToRoleAsync(account, "ADMIN");
 
                     if (rs.Succeeded)
                     {
-                        // Send email confirm to user
-                        var token = _userManager.GenerateEmailConfirmationTokenAsync(account);
-                        var body = "";
-                        var email = new EmailOption
-                        {
-                            ToEmail = account.Email,
-                            Subject = "Email confirmation",
-                            Body = body
-                        };
-                        var send = await _webService.SendEmail(email);
-
-                        // if(send){
-                        //     return new Response{
-                        //         Message = "Create Account successfully",
-                        //         IsSuccess = true
-                        //     };
-                        // }
-
+                       
                         return new Response
                         {
-                            Message = "Email is invalid",
-                            IsSuccess = false
+                            Message = "Tạo tài khoản quản trị viên thành công",
+                            IsSuccess = true
                         };
 
                     }
                     return new Response
                     {
-                        Message = "User is not created",
+                        Message = "Tạo tài khoản quản trị viên thất bại",
                         IsSuccess = false
                     };
                 }
@@ -287,54 +278,288 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
-
-        public async Task<Response> UploadAvatarAsync(ClaimsPrincipal user, IFormFile img)
+ 
+        public async Task<Response> LogInAdminAsync(LogInDto user)
         {
-            try{
-                FileStream fs;
-                FileStream ms = null;
-                if (img.Length > 0)
+            var userExist = await _userManager.FindByEmailAsync(user.Email);
+            if (userExist != null && await _userManager.CheckPasswordAsync(userExist, user.Password))
+            {
+                var userRoles = await _userManager.GetRolesAsync(userExist);
+                if (userRoles[0] != "ADMIN")
                 {
-                    string path = "./FileUpload/Avatar/";
-                    try
-                    {
-                        using (fs = new FileStream(Path.Combine(path, "avatar.jpg"), FileMode.Create))
-                        {
-                            await img.CopyToAsync(fs);
-                        }
-                        ms = new FileStream(Path.Combine(path, "avatar.jpg"), FileMode.Open);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(ex.Message);
-                    }
-
-                    var imgUrl = await _webService.UploadFileToFirebase(ms, "Avatar", img.FileName);
-
-                    // Update avatar to db
-                    var userCheck = await _userManager.GetUserAsync(user);
-                    userCheck.Avatar = imgUrl;
-                    await _userManager.UpdateAsync(userCheck);
-
                     return new Response
                     {
-                        Message = "Tải ảnh thành công",
-                        Data = new Dictionary<string, object>
-                        {
-                            ["imageUrl"] = imgUrl
+                        Message = "Bạn không có quyền đăng nhập vào hệ thống.",
+                        IsSuccess = false
+                    };
+                }
+
+                var authClaims = new List<Claim>
+                {
+                    new Claim("Name", userExist.FullName),
+                    new Claim(ClaimTypes.NameIdentifier, userExist.Id),
+                    new Claim("Role", userRoles[0]),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                };
+                var token = GetToken(authClaims);
+
+                var userDto = _mapper.Map<Account, UserDto>(userExist); 
+                var data = new Dictionary<string, object>
+                {
+                    ["token"] = new JwtSecurityTokenHandler().WriteToken(token),
+                    ["account"] =  userDto
+                };
+                return new Response
+                {
+                    Message = "Đăng nhập thành công.",
+                    Data = data,
+                    IsSuccess = true
+                };
+            }
+            else
+            {
+                return new Response
+                {
+                    Message = "Email hoặc mật khẩu không đúng.",
+                    IsSuccess = false
+                };
+            }
+        }
+
+        public async Task<Response> GetUserAsync(string userId)
+        {
+            try
+            {
+                var userCheck = await _userManager.FindByIdAsync(userId);
+                if (userCheck != null)
+                {
+                    var user = _mapper.Map<Account, UserDto>(userCheck);
+      
+                    return new Response
+                    {
+                        Message = "Lấy thông tin tài khoản thành công",
+                        Data = new Dictionary<string, object>{
+                            ["user"] = user
                         },
                         IsSuccess = true
                     };
                 }
+                else
+                {
+                    return new Response
+                    {
+                        Message = "Tài khoản không tồn tại",
+                        IsSuccess = false
+                    };
+                }
+            }
+            catch
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        public async Task<Response> UploadAvatarAsync(string userId, string avatar_url){
+            try
+            {
+                var userCheck = await _userManager.FindByIdAsync(userId);
+                if (userCheck != null)
+                {
+                    userCheck.Avatar = avatar_url;
+                    var rs = await _userManager.UpdateAsync(userCheck);
+                    if (rs.Succeeded)
+                    {                
+                        var account = _mapper.Map<Account, UserDto>(userCheck);
+                        return new Response
+                        {
+                            Message = "Cập nhật thông tin tài khoản thành công",
+                            Data = new Dictionary<string, object>{
+                                ["user"] = account
+                            },
+                            IsSuccess = true
+                        };
+
+                    }
+                    return new Response
+                    {
+                        Message = "Cập nhật tài khoản thất bại",
+                        IsSuccess = false
+                    };
+                }
+                else
+                {
+                    return new Response
+                    {
+                        Message = "Tài khoản không tồn tại",
+                        IsSuccess = false
+                    };
+                }
+            }
+            catch
+            {
+                throw new NotImplementedException();
+            }
+        }
+        public async Task<Response> UpdateUserAsync(string userId, UserUpdateDto user)
+        {
+            try
+            {
+                var userCheck = await _userManager.FindByIdAsync(userId);
+                if (userCheck != null)
+                {
+                    userCheck.FullName = user.FullName;
+                    if (user.Password != null)
+                        userCheck.PasswordHash = _userManager.PasswordHasher.HashPassword(userCheck,user.Password);
+                    var rs = await _userManager.UpdateAsync(userCheck);
+                    var account = _mapper.Map<Account, UserDto>(userCheck);
+                    if (rs.Succeeded)
+                    {                
+                        return new Response
+                        {
+                            Message = "Cập nhật thông tin tài khoản thành công",
+                            Data = new Dictionary<string, object>{
+                                ["user"] = account
+                            },
+                            IsSuccess = true
+                        };
+
+                    }
+                    return new Response
+                    {
+                        Message = "Cập nhật tài khoản thất bại",
+                        IsSuccess = false
+                    };
+                }
+                else
+                {
+                    return new Response
+                    {
+                        Message = "Tài khoản không tồn tại",
+                        IsSuccess = false
+                    };
+                }
+            }
+            catch
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        public async Task<Response> GetListUsersAsync(string adminId)
+        {
+            var userExist = await _userManager.FindByIdAsync(adminId);
+            if (userExist != null)
+            {
+                var userRoles = await _userManager.GetRolesAsync(userExist);
+                if (userRoles[0] != "ADMIN")
+                {
+                    return new Response
+                    {
+                        Message = "Bạn không có quyền sử dụng chức năng này.",
+                        IsSuccess = false
+                    };
+                }
+                var query = @"SELECT u.Id, u.FullName, u.Email, u.EmailConfirmed, u.Avatar, r.Name as Role, w.WorkspaceQuantity
+                            FROM aspnetusers u
+                            INNER JOIN
+                            (
+                                SELECT r.Name, ur.UserId
+                                FROM aspnetroles r
+                                INNER JOIN aspnetuserroles ur on ur.RoleId = r.Id
+                            ) as r on r.UserId = u.Id
+                            LEFT JOIN
+                            (
+                                SELECT COUNT(w.Id) as WorkspaceQuantity, mw.UserId
+                                FROM Workspaces w
+                                INNER JOIN memberworkspaces mw on mw.WorkspaceId = w.Id
+                                GROUP BY mw.UserId
+                            ) as w on w.UserId = u.Id;";
+                List<UserWorkspaceDto> userWorkspaceDtos = await _dapperContext.GetListAsync<UserWorkspaceDto>(query);
+
+                
                 return new Response
                 {
-                    Message = "Tải ảnh đã bị lỗi",
+                    Message = "Lấy danh sách người dùng thành công.",
+                    Data = new Dictionary<string,object>{
+                        ["users"]= userWorkspaceDtos
+                    },
+                    IsSuccess = true
+                };
+            }
+            else
+            {
+                return new Response
+                {
+                    Message = "Tài khoản không tồn tại.",
                     IsSuccess = false
                 };
             }
-            catch (Exception e){
-                throw e;
+        }
+
+        public async Task<Response> GetListWorkspacesByUserAsync(string adminId, string userId)
+        {
+            var userExist = await _userManager.FindByIdAsync(adminId);
+            if (userExist != null)
+            {
+                var userRoles = await _userManager.GetRolesAsync(userExist);
+                if (userRoles[0] != "ADMIN")
+                {
+                    return new Response
+                    {
+                        Message = "Bạn không có quyền sử dụng chức năng này.",
+                        IsSuccess = false
+                    };
+                }
+                var query = @"SELECT u.Id, u.FullName, u.Email, u.Avatar,  u.EmailConfirmed, r.Name as Role
+                            FROM aspnetusers u
+                            INNER JOIN
+                            (
+                                SELECT r.Name, ur.UserId
+                                FROM aspnetroles r
+                                INNER JOIN aspnetuserroles ur on ur.RoleId = r.Id
+                            ) as r on r.UserId = u.Id
+                            WHERE u.Id = @UserId;"+
+                            @"SELECT w.Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted
+                            FROM Workspaces w
+                            INNER JOIN memberworkspaces mw on mw.WorkspaceId = w.Id
+                            WHERE mw.UserId = @userId;";
+                var parameters = new DynamicParameters();
+                parameters.Add("userId", userId, DbType.String);
+
+                UserWorkspaceDto userWorkspaceDto = null;
+                using (var connection = _dapperContext.CreateConnection())
+                using(var multiResult = await connection.QueryMultipleAsync(query, parameters)){
+                    userWorkspaceDto = await multiResult.ReadSingleOrDefaultAsync<UserWorkspaceDto>();
+                    if (userWorkspaceDto != null)
+                    {
+                        userWorkspaceDto.Workspaces = (await multiResult.ReadAsync<WorkspaceDto>()).ToList();
+                    }
+
+                }  
+                if (userWorkspaceDto == null)
+                    return new Response
+                    {
+                        Message = "Người dùng không tồn tại.",
+                        IsSuccess = false
+                    };
+                return new Response
+                {
+                    Message = "Lấy danh sách dự án của người dùng thành công.",
+                    Data = new Dictionary<string,object>{
+                        ["user"]= userWorkspaceDto
+                    },
+                    IsSuccess = true
+                };
+            }
+            else
+            {
+                return new Response
+                {
+                    Message = "Tài khoản không tồn tại.",
+                    IsSuccess = false
+                };
             }
         }
+
     }
 }

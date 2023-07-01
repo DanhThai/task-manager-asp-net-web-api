@@ -20,14 +20,16 @@ namespace TaskManager.API.Services.Repository
         private readonly IWebService _webService;
         private readonly IConfiguration _configuration;
         private IHubContext<HubService, IHubService> _hubService;
+        private readonly GetData _getData;
 
 
-        public WorkspaceRepository(DataContext dataContext, 
-            IMapper mapper, 
-            DapperContext dapperContext, 
-            IWebService webService, 
-            IConfiguration configuration, 
-            IHubContext<HubService, IHubService> hubService)
+        public WorkspaceRepository(DataContext dataContext,
+            IMapper mapper,
+            DapperContext dapperContext,
+            IWebService webService,
+            IConfiguration configuration,
+            IHubContext<HubService, IHubService> hubService,
+            GetData getData = null)
         {
             _dataContext = dataContext;
             _mapper = mapper;
@@ -35,6 +37,7 @@ namespace TaskManager.API.Services.Repository
             _webService = webService;
             _configuration = configuration;
             _hubService = hubService;
+            _getData = getData;
         }
 
         public async Task<Response> CreateWorkspaceAsync(WorkspaceDto workspaceDto, string userId, string userName)
@@ -90,10 +93,20 @@ namespace TaskManager.API.Services.Repository
         public async Task<Response> GetWorkspaceByIdAsync(int workspaceId, string userId)
         {
             try{
+                var mbWorkspace = _dataContext.MemberWorkspaces.FirstOrDefault(w => w.WorkspaceId == workspaceId && w.UserId == userId);
+                if (mbWorkspace == null)
+                    return new Response{
+                        Message = "Bạn không phải là thành viên dự án.",
+                        IsSuccess = false
+                    };
+                mbWorkspace.VisitDate = DateTime.Now;
+                _dataContext.MemberWorkspaces.Update(mbWorkspace);
+                await SaveChangeAsync();
+
                 var currentDay = DateTime.Now.AddDays(-10);
-                var query = @"SELECT Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted 
+                var query = @"SELECT Id, Title, Description, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted 
                               FROM Workspaces w WHERE w.Id = @WorkspaceId;" +
-                            @"SELECT u.Id, u.FullName, u.Email, u.Avatar, mw.Role
+                            @"SELECT mw.UserId, u.FullName, u.Email, u.Avatar, mw.Role
                               FROM aspnetusers u
                               INNER JOIN MemberWorkspaces mw on u.Id = mw.UserId 
                               WHERE mw.WorkspaceId = @WorkspaceId;"+
@@ -104,10 +117,11 @@ namespace TaskManager.API.Services.Repository
                               FROM Activations a
                               INNER JOIN aspnetusers u on u.Id = a.UserId 
                               WHERE WorkspaceId = @WorkspaceId
-                              ORDER BY a.Id DESC LIMIT 10;"+
-                            @"SELECT Title, Content, Color, Date
-                              FROM Schedules
-                              WHERE WorkspaceId = @WorkspaceId AND Date >= @currentDay;";
+                              ORDER BY a.CreateAt DESC LIMIT 10;";
+                            // @"SELECT s.*, u.FullName, u.Email, u.Avatar
+                            //   FROM Schedules s
+                            //   INNER JOIN aspnetusers u on u.Id = s.CreatorId
+                            //   WHERE s.WorkspaceId = @workspaceId;";
 
                 var parameters = new DynamicParameters();
                 parameters.Add("WorkspaceId", workspaceId, DbType.Int32);  
@@ -122,10 +136,10 @@ namespace TaskManager.API.Services.Repository
                         workspaceDto.Members = (await multiResult.ReadAsync<MemberWorkspaceDto>()).ToList();
                         if(workspaceDto.Members != null){
 
-                            // Check member has been workspae
+                            // Check member has been workspace
                             var isMember = false;
                             foreach (var member in workspaceDto.Members){
-                                if (member.Id == userId)
+                                if (member.UserId == userId)
                                 {
                                     isMember = true;
                                     workspaceDto.MyRole =  (int)member.Role;
@@ -138,13 +152,13 @@ namespace TaskManager.API.Services.Repository
                                     IsSuccess = false
                                 };
 
-                            // Move user to the first of list
-                            var index = workspaceDto.Members.FindIndex(x => x.Id == userId);
-                            if (index > 0){
-                                var temp = workspaceDto.Members[0];
-                                workspaceDto.Members[0] = workspaceDto.Members[index];
-                                workspaceDto.Members[index] = temp;
-                            }
+                            // // Move user to the first of list
+                            // var index = workspaceDto.Members.FindIndex(x => x.Id == userId);
+                            // if (index > 0){
+                            //     var temp = workspaceDto.Members[0];
+                            //     workspaceDto.Members[0] = workspaceDto.Members[index];
+                            //     workspaceDto.Members[index] = temp;
+                            // }
                         }
 
                         workspaceDto.Cards = (await multiResult.ReadAsync<CardDto>()).ToList();
@@ -158,7 +172,7 @@ namespace TaskManager.API.Services.Repository
                                 }
                         }
                         workspaceDto.Activations = (await multiResult.ReadAsync<ActivationDto>()).ToList();
-                        workspaceDto.Schedules = (await multiResult.ReadAsync<ScheduleDto>()).ToList();
+                        // workspaceDto.Schedules = (await multiResult.ReadAsync<ScheduleDto>()).ToList();
                     }
                 }
                 if (workspaceDto == null){
@@ -205,10 +219,11 @@ namespace TaskManager.API.Services.Repository
                             currenttaskItem = taskItem;
                             taskItemDict.Add(taskItem.Id, currenttaskItem);
                         }
-                        if (memberTask != null && workspaceDto.Members.FirstOrDefault(m => m.Id == memberTask.UserId) != null){
+                        if (memberTask != null && currenttaskItem.Members.FirstOrDefault(m => m.UserId == memberTask.UserId) == null){
                             currenttaskItem.Members.Add(memberTask);
                         }
-                        if (label != null){
+                        if (label != null 
+                            && currenttaskItem.Labels.FirstOrDefault(m => m.Id == label.Id) == null){
                             currenttaskItem.Labels.Add(label);
                         }
                         return currenttaskItem;
@@ -250,18 +265,46 @@ namespace TaskManager.API.Services.Repository
         public async Task<Response> GetWorkspaceRecentlyAsync(string userId)
         {
             try{
-                // var workspaces =  _dataContext.Workspaces.Where( w => w.Users.FirstOrDefault(u => u.Id == userId) != null).ToList();
-                var query = @"SELECT w.Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted, mw.Role as MyRole
-                              FROM Workspaces w
-                              INNER JOIN MemberWorkspaces mw on w.Id = mw.WorkspaceId
-                              WHERE mw.UserId = @userId
-                              ORDER BY w.VisitDate DESC
-                              LIMIT 5";
+
+                var query = @"SELECT W.*, mw.*
+                            FROM
+                            (
+                                SELECT w.Id, Title, Description, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted, mw.Role as MyRole, mw.VisitDate
+                                FROM Workspaces w
+                                INNER JOIN MemberWorkspaces mw on w.Id = mw.WorkspaceId
+                                WHERE mw.UserId = @userId
+                            ) as w
+                            LEFT JOIN 
+                            (
+                                SELECT mw.UserId, FullName, Email, avatar, mw.WorkspaceId
+                                FROM aspnetusers u
+                                INNER JOIN MemberWorkspaces mw on mw.UserId = u.Id
+                            ) as mw ON mw.WorkspaceId = w.Id
+                            ORDER BY w.VisitDate DESC
+                            LIMIT 5";
                 var parameters = new DynamicParameters();
-                parameters.Add("userId", userId, DbType.String);             
-                List<WorkspaceDto> workspaceDtos = await _dapperContext.GetListAsync<WorkspaceDto>(query, parameters);
-                
-                // List<WorkspaceDto> workspaceDtos = _mapper.Map<List<Workspace>, List<WorkspaceDto>>(workspaces);
+                parameters.Add("userId", userId, DbType.String);   
+                // parameters.Add("userId", "0d5a3063-5c35-4c7f-896f-4048420d2c17", DbType.String);  
+
+                var workspaceDict = new Dictionary<int, WorkspaceDto>();
+                using (var connection = _dapperContext.CreateConnection())
+                {
+                    await connection.QueryAsync<WorkspaceDto,MemberWorkspaceDto, WorkspaceDto>(
+                    query, (workspace, memberWorkspace)=>{
+                        if(!workspaceDict.TryGetValue(workspace.Id, out var currentWorkspace)){
+                            currentWorkspace = workspace;
+                            workspaceDict.Add(workspace.Id, currentWorkspace);
+                        }
+                        if (memberWorkspace != null ){
+                            currentWorkspace.Members.Add(memberWorkspace);
+                        }
+                        return currentWorkspace;
+                    }, 
+                    parameters
+                    , splitOn: "UserId");
+                }
+                var workspaceDtos = workspaceDict.Values.ToList();
+
                 if (workspaceDtos == null)
                     workspaceDtos = new List<WorkspaceDto>();
                 return new Response{
@@ -280,16 +323,44 @@ namespace TaskManager.API.Services.Repository
         public async Task<Response> GetWorkspacesByUserAsync(string userId)
         {
             try{
-                // var workspaces =  _dataContext.Workspaces.Where( w => w.Users.FirstOrDefault(u => u.Id == userId) != null).ToList();
-                var query = @"SELECT w.Id, Title, Description, Logo, Background, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted, mw.Role as MyRole
-                              FROM Workspaces w
-                              INNER JOIN MemberWorkspaces mw on w.Id = mw.WorkspaceId
-                              WHERE mw.UserId = @userId";
+                var query = @"SELECT W.*, mw.*
+                            FROM
+                            (
+                                SELECT w.Id, Title, Description, mw.VisitDate, Permission, CreatorId, CreatorName, TaskQuantity, TaskCompleted, mw.Role as MyRole
+                                FROM Workspaces w
+                                INNER JOIN MemberWorkspaces mw on w.Id = mw.WorkspaceId
+                                WHERE mw.UserId = @userId
+                            ) as w
+                            LEFT JOIN 
+                            (
+                                SELECT mw.UserId, FullName, Email, avatar, mw.WorkspaceId
+                                FROM aspnetusers u
+                                INNER JOIN MemberWorkspaces mw on mw.UserId = u.Id
+                            ) as mw ON mw.WorkspaceId = w.Id
+                            ORDER BY w.VisitDate DESC";
                 var parameters = new DynamicParameters();
-                parameters.Add("userId", userId, DbType.String);             
-                List<WorkspaceDto> workspaceDtos = await _dapperContext.GetListAsync<WorkspaceDto>(query, parameters);
-                
-                // List<WorkspaceDto> workspaceDtos = _mapper.Map<List<Workspace>, List<WorkspaceDto>>(workspaces);
+                parameters.Add("userId", userId, DbType.String);  
+                // parameters.Add("userId", "0d5a3063-5c35-4c7f-896f-4048420d2c17", DbType.String);  
+
+                var workspaceDict = new Dictionary<int, WorkspaceDto>();
+                using (var connection = _dapperContext.CreateConnection())
+                {
+                    await connection.QueryAsync<WorkspaceDto,MemberWorkspaceDto, WorkspaceDto>(
+                    query, (workspace, memberWorkspace)=>{
+                        if(!workspaceDict.TryGetValue(workspace.Id, out var currentWorkspace)){
+                            currentWorkspace = workspace;
+                            workspaceDict.Add(workspace.Id, currentWorkspace);
+                        }
+                        if (memberWorkspace != null ){
+                            currentWorkspace.Members.Add(memberWorkspace);
+                        }
+                        return currentWorkspace;
+                    }, 
+                    parameters
+                    , splitOn: "UserId");
+                }
+                var workspaceDtos = workspaceDict.Values.ToList();
+
                 if (workspaceDtos == null)
                     workspaceDtos = new List<WorkspaceDto>();
                 return new Response{
@@ -306,9 +377,18 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        public async Task<Response> DeleteWorkspaceAsync(int workspaceId)
+        public async Task<Response> DeleteWorkspaceAsync(int workspaceId, string userId)
         {
             try{
+                var permission = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (permission.Role != ROLE_ENUM.Owner)
+                {
+                        return new Response
+                        {
+                            Message = "Bạn không có quyền xóa dự án này.",
+                            IsSuccess = false
+                        };
+                }
                 var workspace =  _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceId);
                 if (workspace == null){
                     return new Response{
@@ -317,6 +397,18 @@ namespace TaskManager.API.Services.Repository
                     };
                 }
                 _dataContext.Workspaces.Remove(workspace);
+                
+                var query =@"SELECT mt.Id, mt.UserId, mt.TaskItemId
+                            FROM TaskItems t
+                            INNER JOIN Cards c on c.id = t.CardId
+                            INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
+                            WHERE c.WorkspaceId = @workspaceId";
+                var parameters = new DynamicParameters();
+                parameters.Add("WorkspaceId", workspaceId, DbType.Int32); 
+
+                List<MemberTask> membersTask = await _dapperContext.GetListAsync<MemberTask>(query, parameters);
+                _dataContext.MemberTasks.RemoveRange(membersTask);
+                
                 var save = await SaveChangeAsync();
                 if (save){
                     return new Response{
@@ -363,8 +455,10 @@ namespace TaskManager.API.Services.Repository
                 if (save){
                     // Send workspace to clients
                     workspaceDto = _mapper.Map<Workspace, WorkspaceDto>(workspace);         
-    	            await _hubService.Clients.Group($"Workspace-{workspaceDto.Id}").SendWorkspaceAsync(workspaceDto);
-
+    	            // await _hubService.Clients.Group($"Workspace-{workspaceDto.Id}").WorkspaceAsync(workspaceDto);
+                    // Send SignalR
+                    var resWorkspaceDto = await _getData.GetWorkspaceById(workspaceDto.Id, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceDto.Id}").WorkspaceAsync(resWorkspaceDto);
                     return new Response{
                         Message = "Cập nhật dự án thành công.",
                         IsSuccess = true
@@ -410,9 +504,17 @@ namespace TaskManager.API.Services.Repository
         }
 
         #region Member in workspace
-        public async Task<Response> InviteMemberToWorkspaceAsync(int workspaceId, MemberWorkspaceDto member)
+        public async Task<Response> InviteMemberToWorkspaceAsync(int workspaceId, string userId, MemberWorkspaceDto member)
         {
             try{
+                var uwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (uwAdmin.Role != ROLE_ENUM.Owner){
+                    return new Response{
+                        Message = $"Bạn không có quyền mời thành viên",
+                        IsSuccess = false
+                    };
+                }
+
                 var user = _dataContext.Users.FirstOrDefault(u => u.Email == member.Email && u.EmailConfirmed==true);
                 if (user != null){
                     MemberWorkspace memberExist = _dataContext.MemberWorkspaces.FirstOrDefault(m => m.WorkspaceId == workspaceId && m.UserId == user.Id);
@@ -478,9 +580,11 @@ namespace TaskManager.API.Services.Repository
 
                     var isSave = await SaveChangeAsync();
                     if(isSave){
-                        var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-    	                await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
-                        
+                        // var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
+    	                // await _hubService.Clients.Group($"Workspace-{workspaceId}").ActivationAsync(activationDto);
+                        // Send SignalR
+                        var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                        await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
                         return new Response{
                             Message = $"{_configuration["RootUrl"]}ConfirmEmail.html",
                             IsSuccess = true
@@ -507,29 +611,43 @@ namespace TaskManager.API.Services.Repository
             try{
                 var uwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
                 if (uwAdmin != null){
-                    if (uwAdmin.Role == ROLE_ENUM.Owner || uwAdmin.Role == ROLE_ENUM.Admin){
+                    if (uwAdmin.Role == ROLE_ENUM.Owner){
                         var uwMember = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == memberId);
-                        if (uwMember.Role == ROLE_ENUM.Admin && uwAdmin.Role == ROLE_ENUM.Admin)
-                            return new Response{
-                                Message = $"Bạn không có quyền xóa thành viên",
-                                IsSuccess = false
-                            };
+                        // if (uwMember.Role == ROLE_ENUM.Admin && uwAdmin.Role == ROLE_ENUM.Admin)
+                        //     return new Response{
+                        //         Message = $"Bạn không có quyền xóa thành viên",
+                        //         IsSuccess = false
+                        //     };
                         
                         _dataContext.MemberWorkspaces.Remove(uwMember);
+
+                        // Remove member tasks
+                        var query =@"SELECT mt.Id, mt.UserId, mt.TaskItemId
+                            FROM TaskItems t
+                            INNER JOIN Cards c on c.id = t.CardId
+                            INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
+                            WHERE mt.UserId = @userId AND c.WorkspaceId = @workspaceId";
+                        var parameters = new DynamicParameters();
+                        parameters.Add("userId", userId, DbType.String); 
+                        parameters.Add("WorkspaceId", workspaceId, DbType.Int32); 
+
+                        List<MemberTask> membersTask = await _dapperContext.GetListAsync<MemberTask>(query, parameters);
+                        _dataContext.MemberTasks.RemoveRange(membersTask);
 
                         // add activation
                         var activation = new Activation{
                                                     UserId = userId,
                                                     WorkspaceId = workspaceId,
-                                                    Content = "Đã xóa thành viên khỏi dự án",
+                                                    Content = "đã xóa thành viên khỏi dự án",
                                                     CreateAt = DateTime.Now};
                         await _dataContext.Activations.AddAsync(activation); 
 
                         var isSave = await SaveChangeAsync();
                         if(isSave){
-                            var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                            await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
                             
+                            // Send SignalR
+                            var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                            await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
                             return new Response{
                                 Message = "Đã xóa thành viên khỏi dự án",
                                 IsSuccess = true
@@ -561,7 +679,7 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                var query = @"SELECT u.Id, u.FullName, u.Avatar, u.Email, uw.Role
+                var query = @"SELECT uw.UserId, u.FullName, u.Avatar, u.Email, uw.Role
                               FROM aspnetusers u 
                               INNER JOIN MemberWorkspaces uw on uw.UserId = u.Id
                               WHERE uw.WorkspaceId = @workspaceId";
@@ -589,7 +707,7 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                var query = @"SELECT u.Id, u.FullName, u.Avatar, u.Email, mw.Role
+                var query = @"SELECT mw.UserId, u.FullName, u.Avatar, u.Email, mw.Role
                               FROM aspnetusers u 
                               INNER JOIN MemberWorkspaces mw on mw.UserId = u.Id
                               WHERE mw.WorkspaceId = @workspaceId";
@@ -601,35 +719,42 @@ namespace TaskManager.API.Services.Repository
                 if(n >0){
                     string Ids = "";
                     for(int i=0; i< n; i++){
-                        Ids += $"'{membersWorkspace[i].Id}'";
-                        if (i < n -1)
+                        Ids += $"'{membersWorkspace[i].UserId}'";
+                        if (i < n - 1)
                             Ids += ",";
                     }
 
-                    query = $@"SELECT mt.UserId as Id, COUNT(IsComplete) as TaskQuantity, SUM(IsComplete) as CompletedQuantity
+                    query = $@"SELECT mt.UserId, COUNT(IsComplete) as TaskQuantity, SUM(IsComplete) as CompletedQuantity
                                FROM MemberTasks mt
-                               LEFT JOIN TaskItems t on t.Id = mt.TaskItemId
-                               WHERE mt.UserId in ({Ids})
+                               LEFT JOIN 
+                               (
+                                SELECT t.Id, t.IsComplete, c.WorkspaceId
+                                FROM TaskItems t
+                                INNER JOIN Cards c on c.Id = t.CardId
+                                ) as t on t.Id = mt.TaskItemId
+                               WHERE mt.UserId in ({Ids}) AND t.WorkspaceId = {workspaceId}
                                GROUP BY mt.UserId";
 
                     List<MemberWorkspaceDto> membersWithTask = await _dapperContext.GetListAsync<MemberWorkspaceDto>(query);
                     
                     for (int i = 0; i < membersWorkspace.Count; i++)
                     {
-                        if (i>0 && membersWorkspace[i].Id == userId)
-                        {
-                            var temp = membersWorkspace[0];
-                            membersWorkspace[0] = membersWorkspace[i];
-                            membersWorkspace[i] = temp;
-                            continue;
-                        }
                         var memberTask = membersWithTask.FirstOrDefault(
-                            item => item.Id == membersWorkspace[i].Id
+                            item => item.UserId == membersWorkspace[i].UserId
                         );
                         if (memberTask != null){
                             membersWorkspace[i].CompletedQuantity = memberTask.CompletedQuantity;
                             membersWorkspace[i].TaskQuantity = memberTask.TaskQuantity;
                         }
+
+                        // Move user to the first of list
+                        if (i>0 && membersWorkspace[i].UserId == userId)
+                        {
+                            var temp = membersWorkspace[0];
+                            membersWorkspace[0] = membersWorkspace[i];
+                            membersWorkspace[i] = temp;
+                            continue;
+                        }                       
                     }
 
                     // // Move user to the first of list
@@ -663,21 +788,41 @@ namespace TaskManager.API.Services.Repository
             try{
                 var userWorkspace = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
                 if (userWorkspace != null){
+                    if(userWorkspace.Role == ROLE_ENUM.Owner){
+                        return new Response{
+                        Message = $"Bạn là người tạo dự án. Không thể rời dự án",
+                        IsSuccess = false
+                    };
+                    }
                     _dataContext.MemberWorkspaces.Remove(userWorkspace);
+
+                    // Remove member tasks
+                    var query =@"SELECT mt.Id, mt.UserId, mt.TaskItemId
+                        FROM TaskItems t
+                        INNER JOIN Cards c on c.id = t.CardId
+                        INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
+                        WHERE mt.UserId = @userId AND c.WorkspaceId = @workspaceId";
+                    var parameters = new DynamicParameters();
+                    parameters.Add("userId", userId, DbType.String); 
+                    parameters.Add("WorkspaceId", workspaceId, DbType.Int32); 
+
+                    List<MemberTask> membersTask = await _dapperContext.GetListAsync<MemberTask>(query, parameters);
+                    _dataContext.MemberTasks.RemoveRange(membersTask);
 
                     // add activation
                     var activation = new Activation{
                                                 UserId = userId,
                                                 WorkspaceId = workspaceId,
-                                                Content = "Rời khỏi dự án",
+                                                Content = "rời khỏi dự án",
                                                 CreateAt = DateTime.Now};
                     await _dataContext.Activations.AddAsync(activation); 
 
                     var isSave = await SaveChangeAsync();
                     if(isSave){
-                        var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-    	                await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
-                        
+                       
+                        // Send SignalR
+                        var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                        await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
                         return new Response{
                             Message = "Rời khỏi dự án thành công",
                             IsSuccess = true

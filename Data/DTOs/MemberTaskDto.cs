@@ -5,7 +5,6 @@ namespace TaskManager.API.Data.DTOs
 {
     public class MemberTaskDto
     {
-        [Key]
         public int Id { get; set;}
         public bool Requested { get; internal set; } = false;
         public DateTime? ExtendDate { get; set;}

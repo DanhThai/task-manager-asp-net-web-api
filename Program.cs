@@ -74,7 +74,10 @@ services.AddAuthentication(options =>{
 
 // Enable CORS
 services.AddCors(p=>p.AddPolicy("MyCors", build =>{
-    build.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+    build.WithOrigins("http://localhost:3000")
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .AllowCredentials();
 }));
 
 services.AddHttpContextAccessor();
@@ -84,8 +87,10 @@ services.AddScoped<IWorkspaceRepository,WorkspaceRepository>();
 services.AddScoped<ITaskItemRepository,TaskItemRepository>();
 services.AddScoped<ILabelRepository,LabelRepository>();
 services.AddScoped<ISubtaskRepository,SubtaskRepository>();
+services.AddScoped<IScheduleRepository,ScheduleRepository>();
 services.AddTransient<IWebService,WebService>();
 services.AddSingleton<DapperContext>();
+services.AddSingleton<GetData>();
 
 // Add mapper
 services.AddAutoMapper(typeof(MapperProfile).Assembly);

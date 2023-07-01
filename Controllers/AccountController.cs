@@ -1,4 +1,5 @@
 
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
@@ -17,6 +18,13 @@ namespace TaskManager.API.Controllers
             _accountRepository = accountRepository;
         }
         
+        [Authorize]
+        [HttpGet]
+        public async Task<IActionResult> GetUser(){
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+            var result = await _accountRepository.GetUserAsync(userId);
+            return Ok(result);
+        }
 
         [HttpPost("login")]
         public async Task<IActionResult> LogIn(LogInDto user){
@@ -45,11 +53,47 @@ namespace TaskManager.API.Controllers
             var result = await _accountRepository.ConfirmEmailAsync(userId, token);
             return RedirectPermanent(result.Message);;
         }
+
+        [Authorize]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateUser(string id, UserUpdateDto user){
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+            if (userId != id){
+                return BadRequest();
+            }
+            var result = await _accountRepository.UpdateUserAsync(userId, user);
+            return Ok(result);
+        }
         
-        [HttpPost("upload-avt")]
-        public async Task<IActionResult> UploadAvatar([FromForm] IFormFile avatar){
-            var rs = await _accountRepository.UploadAvatarAsync(User, avatar);
+        [HttpPut("upload-avt")]
+        public async Task<IActionResult> UploadAvatar(UserUpdateDto user){
+            if(user.Avatar == "")
+                return BadRequest();
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);            
+            var rs = await _accountRepository.UploadAvatarAsync(userId, user.Avatar);
             return Ok(rs);
+        }
+
+        [HttpPost("admin/login")]
+        public async Task<IActionResult> LogInAdmin(LogInDto admin){
+            var result = await _accountRepository.LogInAdminAsync(admin);
+            return Ok(result);
+        }
+
+        [Authorize]
+        [HttpGet("admin/users")]
+        public async Task<IActionResult> GetListUsers(){
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+            var result = await _accountRepository.GetListUsersAsync(adminId);
+            return Ok(result);
+        }
+
+        [Authorize]
+        [HttpGet("admin/users/{userId}")]
+        public async Task<IActionResult> GetListUsers(string userId){
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+            var result = await _accountRepository.GetListWorkspacesByUserAsync(adminId, userId);
+            return Ok(result);
         }
 
         

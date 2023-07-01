@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.SignalR;
 using TaskManager.API.Data;
 using TaskManager.API.Data.DTOs;
 using TaskManager.API.Data.Models;
+using TaskManager.API.Helper;
 using TaskManager.API.Services.IRepository;
 
 namespace TaskManager.API.Services.Repository
@@ -16,12 +17,15 @@ namespace TaskManager.API.Services.Repository
         private readonly IMapper _mapper;
         private readonly DapperContext _dapperContext;
         private IHubContext<HubService, IHubService> _hubService;
-        public SubtaskRepository(DataContext dataContext, IMapper mapper, DapperContext dapperContext, IHubContext<HubService, IHubService> hubService)
+        private readonly GetData _getData;
+
+        public SubtaskRepository(DataContext dataContext, IMapper mapper, DapperContext dapperContext, IHubContext<HubService, IHubService> hubService, GetData getData)
         {
             _dataContext = dataContext;
             _mapper = mapper;
             _dapperContext = dapperContext;
             _hubService = hubService;
+            _getData = getData;
         }
         public async Task<Response> CreateSubtaskAsync(int workspaceId, string userId, SubtaskDto subtaskDto)
         {
@@ -44,7 +48,7 @@ namespace TaskManager.API.Services.Repository
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Tạo nhiệm vụ con {subtask.Name} ở trong nhiệm vụ {taskItem.Title}",
+                    Content = $"đã tạo nhiệm vụ con {subtask.Name} ở trong nhiệm vụ {taskItem.Title}",
                     CreateAt = DateTime.Now
                 };
                 await _dataContext.Activations.AddAsync(activation);
@@ -52,9 +56,12 @@ namespace TaskManager.API.Services.Repository
                 var isSaved = await SaveChangeAsync();
                 if (isSaved)
                 {
-                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                    await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
-
+                    // Send SignalR
+                    var workspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(workspaceDto);
+                    var resTaskItemDto = await _getData.GetTaskItemById(subtask.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{subtask.TaskItemId}").TaskItemAsync(resTaskItemDto);
+                    
                     subtaskDto = _mapper.Map<Subtask, SubtaskDto>(subtask);
                     return new Response
                     {
@@ -97,7 +104,7 @@ namespace TaskManager.API.Services.Repository
                     {
                         UserId = userId,
                         WorkspaceId = workspaceId,
-                        Content = $"Xóa nhiệm vụ con {subtask.Name} trong {taskItem.Title}",
+                        Content = $"đã xóa nhiệm vụ con {subtask.Name} trong {taskItem.Title}",
                         CreateAt = DateTime.Now
                     };
                     await _dataContext.Activations.AddAsync(activation);
@@ -105,8 +112,11 @@ namespace TaskManager.API.Services.Repository
                     var isSaved = await SaveChangeAsync();
                     if (isSaved)
                     {
-                        var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                        await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                        // Send SignalR
+                        var workspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                        await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(workspaceDto);
+                        var resTaskItemDto = await _getData.GetTaskItemById(subtask.TaskItemId);
+                        await _hubService.Clients.Group($"taskItem-{subtask.TaskItemId}").TaskItemAsync(resTaskItemDto);
 
                         return new Response
                         {
@@ -156,10 +166,32 @@ namespace TaskManager.API.Services.Repository
                     var taskItem = _dataContext.TaskItems.FirstOrDefault(c => c.Id == subtask.TaskItemId);
                     if((bool)patchSubtask.Operations[0].value){
                         taskItem.SubtaskCompleted += 1;
+                        taskItem.IsComplete = taskItem.SubtaskCompleted == taskItem.SubtaskQuantity;
                     }
                     else
-                        taskItem.SubtaskCompleted -= 1;
-                    _dataContext.TaskItems.Update(taskItem);
+                    {
+                        taskItem.IsComplete = false;
+                        taskItem.SubtaskCompleted = taskItem.SubtaskCompleted>0 ? taskItem.SubtaskCompleted-1: 0 ;
+                    }
+                    if(taskItem.SubtaskCompleted <= taskItem.SubtaskQuantity && taskItem.SubtaskCompleted >= 0){
+                        _dataContext.TaskItems.Update(taskItem);
+                        var activation = new Activation
+                        {
+                            UserId = userId,
+                            WorkspaceId = WorkspaceId,
+                            Content = $"đã cập nhật trạng thái nhiệm vụ con {subtask.Name} trong {taskItem.Title}",
+                            CreateAt = DateTime.Now
+                        };
+                    }
+                }
+                else{
+                    var activation = new Activation
+                        {
+                            UserId = userId,
+                            WorkspaceId = WorkspaceId,
+                            Content = $"đã cập nhật chỉnh sửa nhiệm vụ con {subtask.Name}",
+                            CreateAt = DateTime.Now
+                        };
                 }
 
                 _dataContext.Subtasks.Update(subtask);
@@ -168,6 +200,12 @@ namespace TaskManager.API.Services.Repository
                 var isSaved = await SaveChangeAsync();
                 if (isSaved)
                 {
+                    // Send SignalR
+                    var workspaceDto = await _getData.GetWorkspaceById(WorkspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{WorkspaceId}").WorkspaceAsync(workspaceDto);
+                    var resTaskItemDto = await _getData.GetTaskItemById(subtask.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{subtask.TaskItemId}").TaskItemAsync(resTaskItemDto);
+                    
                     return new Response
                     {
                         Message = "Cập nhật nhiệm vụ con thành công",
@@ -211,6 +249,8 @@ namespace TaskManager.API.Services.Repository
                 var isSaved = await SaveChangeAsync();
                 if (isSaved)
                 {
+                    var resTaskItemDto = await _getData.GetTaskItemById(subtask.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{subtask.TaskItemId}").TaskItemAsync(resTaskItemDto);
                     return new Response
                     {
                         Message = "Cập nhật nhiệm vụ con thành công.",

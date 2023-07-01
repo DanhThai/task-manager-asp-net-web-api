@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using TaskManager.API.Data;
 using TaskManager.API.Data.DTOs;
 using TaskManager.API.Data.Models;
+using TaskManager.API.Helper;
 using TaskManager.API.Services.IRepository;
 
 namespace TaskManager.API.Services.Repository
@@ -18,20 +19,36 @@ namespace TaskManager.API.Services.Repository
         private readonly DapperContext _dapperContext;
         private readonly IWebService _webService;
         private IHubContext<HubService, IHubService> _hubService;
+        private readonly IWorkspaceRepository _workspaceRepository;
+        private readonly GetData _getData;
 
-        public TaskItemRepository(DataContext dataContext, IMapper mapper, DapperContext dapperContext, IWebService webService, IHubContext<HubService, IHubService> hubService)
+
+        public TaskItemRepository(DataContext dataContext, IMapper mapper, DapperContext dapperContext, IWebService webService, IHubContext<HubService, IHubService> hubService, IWorkspaceRepository workspaceRepository, GetData getData = null)
         {
             _dataContext = dataContext;
             _mapper = mapper;
             _dapperContext = dapperContext;
             _webService = webService;
             _hubService = hubService;
+            _workspaceRepository = workspaceRepository;
+            _getData = getData;
         }
 
         public async Task<Response> CreateTaskItemAsync(int workspaceId, string userId, TaskItemDto taskItemDto)
         {
             try
             {
+                // Check user have permission to assign
+                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
+                    x => x.WorkspaceId == workspaceId &&
+                    x.UserId == userId);
+                if (mwAdmin.Role == ROLE_ENUM.Member)
+                    return new Response
+                    {
+                        Message = "Bạn không được phép tạo nhiệm vụ",
+                        IsSuccess = false
+                    };
+
                 TaskItem taskItem = _mapper.Map<TaskItemDto, TaskItem>(taskItemDto);
                 taskItem.CreatorId = userId;
                 Console.WriteLine("userId", userId);
@@ -60,7 +77,7 @@ namespace TaskManager.API.Services.Repository
                     {
                         UserId = userId,
                         WorkspaceId = workspaceId,
-                        Content = $"Create task {taskItem.Title} in card {card.Name}",
+                        Content = $"đã tạo nhiệm vụ {taskItem.Title} trong thẻ {card.Name}",
                         CreateAt = DateTime.Now
                     };
                     await _dataContext.Activations.AddAsync(activation);
@@ -68,17 +85,13 @@ namespace TaskManager.API.Services.Repository
                     var workspace = _dataContext.Workspaces.FirstOrDefault(x => x.Id == workspaceId);
                     workspace.TaskQuantity += 1;
                     workspace.IsComplete = false;
-                    workspace.VisitDate = DateTime.Now;
                     _dataContext.Workspaces.Update(workspace);
 
                     isSaved = await SaveChangeAsync();
 
-                    // Send changed card to client hub
-                    var cardDto = _mapper.Map<Card, CardDto>(card);
-                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                    await _hubService.Clients.Group($"Workspace-{workspaceId}").SendCardAsync(cardDto);
-                    await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
 
+                    var resWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(resWorkspaceDto);
                     taskItemDto = _mapper.Map<TaskItem, TaskItemDto>(taskItem);
                     return new Response
                     {
@@ -113,7 +126,7 @@ namespace TaskManager.API.Services.Repository
                               INNER JOIN aspnetusers u on u.Id = t.CreatorId
                               WHERE t.Id = @taskItemId;" +
                             // Get member is assigned
-                            @"SELECT mt.Id, u.Id as UserId, u.FullName, u.Avatar, u.Email, mt.TaskItemId
+                            @"SELECT mt.Id, Requested, ExtendDate, u.Id as UserId, u.FullName, u.Avatar, u.Email, mt.TaskItemId
                               FROM aspnetusers u  
                               INNER JOIN MemberTasks mt on u.Id = mt.UserId 
                               WHERE mt.TaskItemId = @taskItemId;" +
@@ -143,15 +156,15 @@ namespace TaskManager.API.Services.Repository
                     if (taskItemDto != null)
                     {
                         taskItemDto.Members = (await multiResult.ReadAsync<MemberTaskDto>()).ToList();
-                        if (taskItemDto.Members != null)
-                        {
-                            // Find member request extend due date
-                            foreach (var member in taskItemDto.Members)
-                            {
-                                if (member.Requested)
-                                    taskItemDto.MemberExtendDueDate = member;
-                            }
-                        }
+                        // if (taskItemDto.Members != null)
+                        // {
+                        //     // Find member request extend due date
+                        //     foreach (var member in taskItemDto.Members)
+                        //     {
+                        //         if (member.Requested)
+                        //             taskItemDto.MemberExtendDueDate = member;
+                        //     }
+                        // }
                         taskItemDto.Comments = (await multiResult.ReadAsync<CommentDto>()).ToList();
                         taskItemDto.Subtasks = (await multiResult.ReadAsync<SubtaskDto>()).ToList();
                         taskItemDto.Labels = (await multiResult.ReadAsync<LabelDto>()).ToList();
@@ -252,7 +265,7 @@ namespace TaskManager.API.Services.Repository
                 var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == taskItemId);
 
                 var card = _dataContext.Cards.FirstOrDefault(c => c.Id == taskItem.CardId);
-                if (card.TaskQuantity == 1)
+                if (card.TaskQuantity <= 1)
                 {
                     card.TaskOrder = "";
                     card.TaskQuantity = 0;
@@ -266,23 +279,24 @@ namespace TaskManager.API.Services.Repository
                 }
                 _dataContext.Cards.Update(card);
 
-                _dataContext.TaskItems.Remove(taskItem);
 
                 var workspace = _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceId);
-                workspace.TaskQuantity -= 1;
-                workspace.VisitDate = DateTime.Now;
+
+                workspace.TaskQuantity = workspace.TaskQuantity >= 1 ? workspace.TaskQuantity - 1 : 0;
+                // workspace.VisitDate = DateTime.Now;
 
                 if (card.Code == CARD_CODE_ENUM.Completed)
                 {
-                    workspace.TaskCompleted -= 1;
+                    workspace.TaskCompleted = workspace.TaskCompleted >= 1 ? workspace.TaskCompleted - 1 : 0;
                 }
                 _dataContext.Workspaces.Update(workspace);
+                _dataContext.TaskItems.Remove(taskItem);
 
                 var activation = new Activation
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Remove task {taskItem.Title}",
+                    Content = $"đã xóa nhiệm vụ {taskItem.Title}",
                     CreateAt = DateTime.Now
                 };
                 await _dataContext.Activations.AddAsync(activation);
@@ -291,6 +305,9 @@ namespace TaskManager.API.Services.Repository
 
                 if (isDeleted)
                 {
+                    var resWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(resWorkspaceDto);
+                    
                     return new Response
                     {
                         Message = "Xóa nhiệm vụ thành công",
@@ -405,7 +422,7 @@ namespace TaskManager.API.Services.Repository
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Chỉnh sửa nhiệm vụ {taskItem.Title}",
+                    Content = $"đã chỉnh sửa thông tin nhiệm vụ {taskItem.Title}",
                     CreateAt = DateTime.Now
                 };
                 await _dataContext.Activations.AddAsync(activation);
@@ -414,8 +431,13 @@ namespace TaskManager.API.Services.Repository
                 if (isUpdated)
                 {
 
-                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                    await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                    // Send SignalR
+                    var resWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(resWorkspaceDto);
+
+                    var resTaskItemDto = await _getData.GetTaskItemById(taskItemId);
+                    await _hubService.Clients.Group($"taskItem-{taskItemId}").TaskItemAsync(resTaskItemDto);
+
                     return new Response
                     {
                         Message = "Cập nhật nhiệm vụ thành công",
@@ -439,6 +461,18 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
+                var permission = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (permission.Role == ROLE_ENUM.Member)
+                {
+                    var memberTask = _dataContext.MemberTasks.FirstOrDefault(x => x.UserId == userId && x.TaskItemId == taskItemId);
+                    if (memberTask == null)
+                        return new Response
+                        {
+                            Message = "Bạn chưa được gán vào nhiệm vụ này.",
+                            IsSuccess = false
+                        };
+                }
+
                 var after = moveTaskDto.After;
                 var before = moveTaskDto.Before;
                 Card cardAfter = null;
@@ -455,7 +489,6 @@ namespace TaskManager.API.Services.Repository
                 if (after["cardId"] != before["cardId"])
                 {
                     taskItem.CardId = after["cardId"];
-                    _dataContext.TaskItems.Update(taskItem);
 
                     // Remove index of task item from card before
                     var cardBefore = _dataContext.Cards.FirstOrDefault(c => c.Id == before["cardId"]);
@@ -465,7 +498,7 @@ namespace TaskManager.API.Services.Repository
                             Message = "Di chuyển nhiệm vụ thất bại",
                             IsSuccess = false
                         };
-                    if (cardBefore.TaskQuantity == 1)
+                    if (cardBefore.TaskQuantity <= 1)
                     {
                         cardBefore.TaskOrder = "";
                         cardBefore.TaskQuantity = 0;
@@ -489,31 +522,37 @@ namespace TaskManager.API.Services.Repository
                     cardAfter.TaskOrder = InsertItemByIndex(cardAfter.TaskOrder, taskItemId, after["index"]);
                     cardAfter.TaskQuantity += 1;
                     _dataContext.Cards.UpdateRange(cardBefore, cardAfter);
-
-                    if (cardAfter.Name == "Completed")
-                    {
+                    if (cardAfter.Code == CARD_CODE_ENUM.Completed || cardBefore.Code == CARD_CODE_ENUM.Completed){
                         var workspace = _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceId);
-                        workspace.TaskCompleted += 1;
-                        _dataContext.Workspaces.Update(workspace);
-                    }
-                    if (cardBefore.Name == "Completed")
-                    {
-                        var workspace = _dataContext.Workspaces.FirstOrDefault(w => w.Id == workspaceId);
-                        workspace.TaskCompleted -= 1;
-                        workspace.VisitDate = DateTime.Now;
-                        _dataContext.Workspaces.Update(workspace);
+                        if (cardAfter.Code == CARD_CODE_ENUM.Completed)
+                        {
+                            workspace.TaskCompleted += 1;
+                            taskItem.IsComplete = true;
+                        }
+                        if (cardBefore.Code == CARD_CODE_ENUM.Completed)
+                        {
+                            workspace.TaskCompleted -= 1;
+                            taskItem.IsComplete = false;
+                        }
+                        if(workspace.TaskCompleted>0 && workspace.TaskCompleted <= workspace.TaskQuantity){
+                            _dataContext.Workspaces.Update(workspace);
+                        }
                     }
 
                     activation = new Activation
                     {
                         UserId = userId,
                         WorkspaceId = workspaceId,
-                        Content = $"Di chuyển {taskItem.Title} từ thẻ {cardBefore.Name} tới thẻ {cardAfter.Name}",
+                        Content = $"đã di chuyển nhiệm vụ {taskItem.Title} từ thẻ {cardBefore.Name} tới thẻ {cardAfter.Name}",
                         CreateAt = DateTime.Now
                     };
                     await _dataContext.Activations.AddAsync(activation);
+                    _dataContext.TaskItems.Update(taskItem);
 
                     isUpdated = await SaveChangeAsync();
+                    // Send SignalR
+                    var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
                     if (isUpdated)
                     {
                         return new Response
@@ -544,7 +583,7 @@ namespace TaskManager.API.Services.Repository
                     {
                         UserId = userId,
                         WorkspaceId = workspaceId,
-                        Content = $"Di chuyển nhiệm vụ {taskItem.Title} trong thẻ {cardAfter.Name}",
+                        Content = $"đã di chuyển nhiệm vụ {taskItem.Title} trong thẻ {cardAfter.Name}",
                         CreateAt = DateTime.Now
                     };
                     await _dataContext.Activations.AddAsync(activation);
@@ -600,7 +639,7 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
-                var query = @"SELECT u.Id, FullName, Avatar, Email, mw.Role
+                var query = @"SELECT mw.UserId, FullName, Avatar, Email, mw.Role
                               FROM aspnetusers u
                               INNER JOIN MemberWorkspaces mw on mw.UserId = u.Id
                               WHERE u.Id = @memberId AND mw.WorkspaceId = @workspaceId";
@@ -620,6 +659,7 @@ namespace TaskManager.API.Services.Repository
                 query = @"SELECT t.Id, t.Title, t.Description, t.Priority, t.DueDate, t.IsComplete, t.SubtaskQuantity, t.SubtaskCompleted, t.CommentQuantity
 		                    ,l.Id, l.Name, l.Color, l.WorkspaceId
                         FROM TaskItems t 
+                        INNER JOIN Cards c on c.Id = t.CardId
                         INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
                         LEFT JOIN 
                         (
@@ -628,45 +668,42 @@ namespace TaskManager.API.Services.Repository
                             INNER JOIN TaskLabels tl on tl.LabelId = l.Id 
                         ) as l on l.TaskItemId = t.id
 
-                        WHERE mt.UserId = @memberId";
+                        WHERE mt.UserId = @memberId AND c.WorkspaceId = @workspaceId";
+
                 // Filter by priority and isComplete
-                if (priority != null)
-                {
-                    query += " AND t.Priority = @priority";
-                    parameters.Add("priority", priority, DbType.Int32);
-                }
-                if (isComplete != null)
-                {
-                    query += " AND t.IsComplete = @isComplete";
-                    parameters.Add("isComplete", isComplete, DbType.Boolean);
-                }
+                // if (priority != null)
+                // {
+                //     query += " AND t.Priority = @priority";
+                //     parameters.Add("priority", priority, DbType.Int32);
+                // }
+                // if (isComplete != null)
+                // {
+                //     query += " AND t.IsComplete = @isComplete";
+                //     parameters.Add("isComplete", isComplete, DbType.Boolean);
+                // }
 
-
-                // List<TaskItemDto> taskItemDtos = await _dapperContext.GetListAsync<TaskItemDto>(query, parameters);
-                // if (taskItemDtos == null)
-                //     return new Response
-                //     {
-                //         Message = "Thành viên chưa được gán task",
-                //         IsSuccess = false
-                //     };
 
                 parameters = new DynamicParameters();
-                parameters.Add("memberId", memberId, DbType.String);  
+                parameters.Add("memberId", memberId, DbType.String);
+                parameters.Add("workspaceId", workspaceId, DbType.String);
 
                 var taskItemsDict = new Dictionary<int, TaskItemDto>();
                 using (var connection = _dapperContext.CreateConnection())
                 {
-                    var multiResult = await connection.QueryAsync<TaskItemDto,LabelDto,TaskItemDto>(
-                    query, (taskItem, label)=>{
-                        if(!taskItemsDict.TryGetValue(taskItem.Id, out var currenttaskItem)){
+                    var multiResult = await connection.QueryAsync<TaskItemDto, LabelDto, TaskItemDto>(
+                    query, (taskItem, label) =>
+                    {
+                        if (!taskItemsDict.TryGetValue(taskItem.Id, out var currenttaskItem))
+                        {
                             currenttaskItem = taskItem;
                             taskItemsDict.Add(taskItem.Id, currenttaskItem);
                         }
-                        if (label != null){
+                        if (label != null)
+                        {
                             currenttaskItem.Labels.Add(label);
                         }
                         return currenttaskItem;
-                    }, 
+                    },
                     parameters
                     , splitOn: "Id");
                 }
@@ -698,18 +735,92 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
+        public async Task<Response> GetUpCommingTasksItemAsync(string userId)
+        {
+            try
+            {
+                var currentDay = DateTime.Now;
+                var upCommingDay = DateTime.Now.AddDays(2);
+                var query = @"SELECT t.*,u.*,l.*
+                            FROM
+                            (
+                                SELECT t.Id, Title, Description, Priority, DueDate, IsComplete, SubtaskQuantity, SubtaskCompleted, CommentQuantity, mt.UserId
+                                FROM TaskItems t 
+                                INNER JOIN MemberTasks mt on mt.TaskItemId = t.Id
+                            ) as t 
+                            LEFT JOIN
+                            (
+                                SELECT mt.UserId, u.FullName, u.Email, u.Avatar, mt.TaskItemId
+                                FROM aspnetusers u
+                                INNER JOIN MemberTasks mt on mt.UserId = u.Id
+                            ) as u on u.TaskItemId = t.Id
+                            LEFT JOIN 
+                            (
+                                SELECT l.Id, Name, Color, WorkspaceId, tl.TaskItemId
+                                FROM Labels l
+                                INNER JOIN TaskLabels tl on tl.LabelId = l.Id 
+                            ) as l on l.TaskItemId = t.Id
+                            WHERE t.UserId = @userId AND t.DueDate BETWEEN @currentDay AND @upCommingDay
+                            ORDER BY t.DueDate ASC";
+
+                var parameters = new DynamicParameters();
+                parameters.Add("userId", userId, DbType.String);
+                parameters.Add("currentDay", currentDay, DbType.DateTime);
+                parameters.Add("upCommingDay", upCommingDay, DbType.DateTime);
+
+                var taskItemDict = new Dictionary<int, TaskItemDto>();
+                using (var connection = _dapperContext.CreateConnection())
+                {
+                    await connection.QueryAsync<TaskItemDto, MemberTaskDto, LabelDto, TaskItemDto>(
+                    query, (taskItem, memberTask, label) =>
+                    {
+                        if (!taskItemDict.TryGetValue(taskItem.Id, out var currenttaskItem))
+                        {
+                            currenttaskItem = taskItem;
+                            taskItemDict.Add(taskItem.Id, currenttaskItem);
+                        }
+                        if (memberTask != null && currenttaskItem.Members.FirstOrDefault(m => m.UserId == memberTask.UserId) == null)
+                        {
+                            currenttaskItem.Members.Add(memberTask);
+                        }
+                        if (label != null && currenttaskItem.Labels.FirstOrDefault(l => l.Id == label.Id) == null)
+                        {
+                            currenttaskItem.Labels.Add(label);
+                        }
+                        return currenttaskItem;
+                    },
+                    parameters
+                    , splitOn: "UserId, Id");
+                }
+                var taskItemDtos = taskItemDict.Values.ToList();
+
+                return new Response
+                {
+                    Message = "Lấy danh sách nhiệm vụ sắp tới thành công",
+                    Data = new Dictionary<string, object>
+                    {
+                        ["TaskItems"] = taskItemDtos
+                    },
+                    IsSuccess = true
+                };
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("GetTasksItemByMemberAsync: " + e.Message);
+                throw e;
+            }
+        }
+
         public async Task<Response> AssignMemberAsync(int taskItemId, int workspaceId, string userId, List<MemberTaskDto> memberTaskDtos)
         {
             try
             {
                 // Check user have permission to assign
-                var creator = _dataContext.TaskItems.FirstOrDefault(
-                    x => x.Id == taskItemId &&
-                    x.CreatorId == userId);
-                if (creator == null)
+                var permission = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (permission == null || permission.Role == ROLE_ENUM.Member)
                     return new Response
                     {
-                        Message = "Bạn không được phép gán thành viên",
+                        Message = "Bạn không có quyền thực hiện chức năng này",
                         IsSuccess = false
                     };
 
@@ -732,6 +843,11 @@ namespace TaskManager.API.Services.Repository
                 var isSaved = await SaveChangeAsync();
 
                 var members = _dataContext.MemberTasks.Where(m => m.TaskItemId == taskItemId).ToList();
+                // Send SignalR
+                var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
+                var resTaskItemDto = await _getData.GetTaskItemById(taskItemId);
+                await _hubService.Clients.Group($"taskItem-{taskItemId}").TaskItemAsync(resTaskItemDto);
                 return new Response
                 {
                     Message = "Gán thành viên vào nhiệm vụ thành công",
@@ -757,6 +873,7 @@ namespace TaskManager.API.Services.Repository
                 var memberTask = _dataContext.MemberTasks.FirstOrDefault(
                     m => m.TaskItemId == memberTaskDto.TaskItemId
                     && m.UserId == userId);
+
                 if (memberTask == null)
                     return new Response
                     {
@@ -770,12 +887,12 @@ namespace TaskManager.API.Services.Repository
                 _dataContext.MemberTasks.Update(memberTask);
 
                 var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == memberTaskDto.TaskItemId);
-
+                var dateTime = memberTask.ExtendDate.Value.ToString("dd/MM/yyyy HH:mm");
                 var activation = new Activation
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Thành viên yêu cầu gia hạn vào {memberTask.ExtendDate.Value.ToShortDateString()} trong nhiệm vụ {taskItem.Title}",
+                    Content = $"đã yêu cầu gia hạn vào {dateTime} trong nhiệm vụ {taskItem.Title}",
                     CreateAt = DateTime.Now
                 };
                 _dataContext.Activations.Add(activation);
@@ -784,8 +901,12 @@ namespace TaskManager.API.Services.Repository
 
                 if (isSaved)
                 {
-                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                    await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                
+                    // Send SignalR
+                    var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
+                    var resTaskItemDto = await _getData.GetTaskItemById(memberTaskDto.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{memberTaskDto.TaskItemId}").TaskItemAsync(resTaskItemDto);
                     return new Response
                     {
                         Message = "Yêu cầu gia hạn thành công",
@@ -805,47 +926,45 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        public async Task<Response> AcceptExtendDueDateAsync(int workspaceId, string userId, MemberTaskDto memberTaskDto)
+        public async Task<Response> AcceptExtendDueDateAsync(int workspaceId, string userId, int memberTaskId)
         {
             try
             {
-                
+                // Check user have permission to assign
+                var permission = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (permission == null || permission.Role == ROLE_ENUM.Member)
+                    return new Response
+                    {
+                        Message = "Bạn không có quyền thực hiện chức năng này.",
+                        IsSuccess = false
+                    };
 
                 var memberTask = _dataContext.MemberTasks.FirstOrDefault(
-                    m => m.TaskItemId == memberTaskDto.TaskItemId
-                    && m.UserId == memberTaskDto.UserId);
+                    m => m.Id == memberTaskId);
 
                 if (memberTask == null)
                     return new Response
                     {
-                        Message = "Bạn không được phép thực hiện chức năng này",
+                        Message = "Thành viên yêu cầu không nằm trong nhiệm vụ này.",
                         IsSuccess = false
                     };
 
                 // Check user have permission to assign
-                var creatorTask = _dataContext.TaskItems.FirstOrDefault(
-                    x => x.Id == memberTask.TaskItemId &&
-                    x.CreatorId == userId);
-                if (creatorTask == null)
-                    return new Response
-                    {
-                        Message = "Bạn không được phép gán thành viên",
-                        IsSuccess = false
-                    };
+                var taskItem = _dataContext.TaskItems.FirstOrDefault(
+                    x => x.Id == memberTask.TaskItemId);
 
-                memberTask.ExtendDate = null;
+                taskItem.DueDate = memberTask.ExtendDate;
+                _dataContext.TaskItems.Update(taskItem);
+
+                // memberTask.ExtendDate = null;
                 memberTask.Requested = false;
-
                 _dataContext.MemberTasks.Update(memberTask);
-
-                creatorTask.DueDate = memberTaskDto.ExtendDate;
-                _dataContext.TaskItems.Update(creatorTask);
 
                 var activation = new Activation
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Chấp nhận yêu cầu gia hạn vào {memberTaskDto.ExtendDate.Value.ToString("dd/MM/yyyy H:mm:ss")} trong nhiệm vụ {creatorTask.Title}",
+                    Content = $"đã chấp nhận yêu cầu gia hạn vào {memberTask.ExtendDate.Value.ToString("dd/MM/yyyy H:mm")} trong nhiệm vụ {taskItem.Title}",
                     CreateAt = DateTime.Now
                 };
                 _dataContext.Activations.Add(activation);
@@ -854,8 +973,12 @@ namespace TaskManager.API.Services.Repository
 
                 if (isSaved)
                 {
-                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                    await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
+                   
+                    // Send SignalR
+                    var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
+                    var resTaskItemDto = await _getData.GetTaskItemById(memberTask.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{memberTask.TaskItemId}").TaskItemAsync(resTaskItemDto);
                     return new Response
                     {
                         Message = "Chấp nhận yêu cầu gia hạn thành công",
@@ -878,29 +1001,25 @@ namespace TaskManager.API.Services.Repository
         {
             try
             {
+                var permission = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (permission == null || permission.Role == ROLE_ENUM.Member)
+                    return new Response
+                    {
+                        Message = "Bạn không có quyền thực hiện chức năng này.",
+                        IsSuccess = false
+                    };
+
                 var memberTask = _dataContext.MemberTasks.FirstOrDefault(
                     m => m.Id == memberTaskId);
                 if (memberTask == null)
                     return new Response
                     {
-                        Message = "Bạn không được phép thực hiện chức năng này",
+                        Message = "Bạn chưa được gán vào nhiệm vụ này",
                         IsSuccess = false
                     };
 
-                // Check user have permission to assign
-                var creatorTask = _dataContext.TaskItems.FirstOrDefault(
-                    x => x.Id == memberTask.TaskItemId &&
-                    x.CreatorId == userId);
 
-                if (creatorTask == null)
-                    return new Response
-                    {
-                        Message = "Bạn không được phép gán thành viên",
-                        IsSuccess = false
-                    };
-
-                
-                memberTask.ExtendDate = null;
+                // memberTask.ExtendDate = null;
                 memberTask.Requested = false;
                 _dataContext.MemberTasks.Update(memberTask);
 
@@ -908,9 +1027,11 @@ namespace TaskManager.API.Services.Repository
 
                 if (isSaved)
                 {
+                    var resTaskItemDto = await _getData.GetTaskItemById(memberTask.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{memberTask.TaskItemId}").TaskItemAsync(resTaskItemDto);
                     return new Response
                     {
-                        Message = "Chấp nhận yêu cầu gia hạn thành công",
+                        Message = "Bạn đã từ chối yêu cầu gia hạn nhiệm vụ này",
                         IsSuccess = true
                     };
                 }
@@ -947,14 +1068,14 @@ namespace TaskManager.API.Services.Repository
                 comment.UpdateAt = DateTime.Now;
                 _dataContext.Comments.Add(comment);
 
-                taskItem.CommentQuantity +=1;
+                taskItem.CommentQuantity += 1;
                 _dataContext.TaskItems.Update(taskItem);
 
                 var activation = new Activation
                 {
                     UserId = userId,
                     WorkspaceId = workspaceId,
-                    Content = $"Thành viên bình luận ở trong nhiệm vụ {taskItem.Title}",
+                    Content = $"đã bình luận ở trong nhiệm vụ {taskItem.Title}",
                     CreateAt = DateTime.Now
                 };
                 _dataContext.Activations.Add(activation);
@@ -963,9 +1084,13 @@ namespace TaskManager.API.Services.Repository
 
                 if (isSaved)
                 {
-                    var activationDto = _mapper.Map<Activation, ActivationDto>(activation);
-                    await _hubService.Clients.Group($"Workspace-{workspaceId}").SendActivationAsync(activationDto);
-
+                   
+                    // Send SignalR
+                    var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                    await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
+                     var resTaskItemDto = await _getData.GetTaskItemById(commentDto.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{commentDto.TaskItemId}").TaskItemAsync(resTaskItemDto);
+                    
                     commentDto = _mapper.Map<Comment, CommentDto>(comment);
                     return new Response
                     {
@@ -1017,6 +1142,9 @@ namespace TaskManager.API.Services.Repository
 
                 if (isSaved)
                 {
+                    var resTaskItemDto = await _getData.GetTaskItemById(commentDto.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{commentDto.TaskItemId}").TaskItemAsync(resTaskItemDto);
+
                     commentDto = _mapper.Map<Comment, CommentDto>(comment);
                     return new Response
                     {
@@ -1059,12 +1187,14 @@ namespace TaskManager.API.Services.Repository
                 _dataContext.TaskItems.Update(taskItem);
                 _dataContext.Comments.Remove(comment);
 
-                
-
                 var isSaved = await SaveChangeAsync();
 
                 if (isSaved)
                 {
+                    
+                    var resTaskItemDto = await _getData.GetTaskItemById(comment.TaskItemId);
+                    await _hubService.Clients.Group($"taskItem-{comment.TaskItemId}").TaskItemAsync(resTaskItemDto);                 
+
                     return new Response
                     {
                         Message = "Xóa bình luận thành công",
@@ -1085,10 +1215,18 @@ namespace TaskManager.API.Services.Repository
         }
 
         #endregion
-        public async Task<Response> AddLabelToTaskItemAsync(int taskItemId, List<LabelDto> labelDtos)
+        public async Task<Response> AddLabelToTaskItemAsync(int taskItemId, int workspaceId, string userId, List<LabelDto> labelDtos)
         {
             try
             {
+                // Check user have permission to assign
+                var permission = _dataContext.MemberWorkspaces.FirstOrDefault(x => x.WorkspaceId == workspaceId && x.UserId == userId);
+                if (permission == null || permission.Role == ROLE_ENUM.Member)
+                    return new Response
+                    {
+                        Message = "Bạn không có quyền thực hiện chức năng này",
+                        IsSuccess = false
+                    };
                 var taskItem = _dataContext.TaskItems.FirstOrDefault(t => t.Id == taskItemId);
                 if (taskItem == null)
                     return new Response
@@ -1122,9 +1260,15 @@ namespace TaskManager.API.Services.Repository
                 }
 
                 var isSaved = await SaveChangeAsync();
+                // Send SignalR
+                var responseWorkspaceDto = await _getData.GetWorkspaceById(workspaceId, userId);
+                await _hubService.Clients.Group($"workspace-{workspaceId}").WorkspaceAsync(responseWorkspaceDto);
+                var resTaskItemDto = await _getData.GetTaskItemById(taskItemId);
+                await _hubService.Clients.Group($"taskItem-{taskItemId}").TaskItemAsync(resTaskItemDto);
+                
                 return new Response
                 {
-                    Message = "Lấy danh sách nhãn thành công",
+                    Message = "Chỉnh sửa nhãn thành công",
                     Data = new Dictionary<string, object>
                     {
                         ["Labels"] = labelDtos,
@@ -1138,7 +1282,6 @@ namespace TaskManager.API.Services.Repository
                 throw e;
             }
         }
-
 
     }
 }

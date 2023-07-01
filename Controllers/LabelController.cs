@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TaskManager.API.Data.DTOs;
 using TaskManager.API.Services.IRepository;
@@ -6,6 +8,7 @@ namespace TaskManager.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class LabelController : ControllerBase
     {
         private readonly ILabelRepository _labelRepository;
@@ -18,7 +21,9 @@ namespace TaskManager.API.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateLabel(LabelDto LabelDto){
             try{
-                var rs = await _labelRepository.CreateLabelAsync(LabelDto); 
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+
+                var rs = await _labelRepository.CreateLabelAsync(LabelDto, userId); 
                 return Ok(rs);
             }
             catch{
@@ -39,8 +44,9 @@ namespace TaskManager.API.Controllers
 
         [HttpPut("{id}", Name = "UpdateLabelById")]
         public async Task<IActionResult> UpdateLabel(int id, LabelDto LabelDto){
-            try{    
-                var rs = await _labelRepository.UpdateLabelAsync(id, LabelDto); 
+            try{  
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _labelRepository.UpdateLabelAsync(id, userId, LabelDto); 
                 return Ok(rs);
             }
             catch{
@@ -52,7 +58,8 @@ namespace TaskManager.API.Controllers
         [HttpDelete("{id}", Name = "DeleteLabelById")]
         public async Task<IActionResult> DeleteLabelByUser(int id){
             try{
-                var rs = await _labelRepository.DeleteLabelAsync(id); 
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _labelRepository.DeleteLabelAsync(id, userId); 
                 return Ok(rs);
             }
             catch{

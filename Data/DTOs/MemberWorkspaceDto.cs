@@ -5,13 +5,13 @@ namespace TaskManager.API.Data.DTOs
 {
     public class MemberWorkspaceDto
     {
-        public string Id { get; set;}
+        public string UserId { get; set;}
         [EmailAddress]
         public string Email { get; set;}
         public string FullName { get; internal set; }
         public string Avatar { get; internal set; } = null;
-        public string Url { get => "/account/user/"+ Id;}
-        public ROLE_ENUM Role {get; set; }
+        public string Url { get => "/account/user/"+ UserId;}
+        public ROLE_ENUM? Role {get; set; } = null;
         public int TaskQuantity { get; internal set; } = 0;
         public int CompletedQuantity { get; internal set; } = 0;
         public int Percentage { get{

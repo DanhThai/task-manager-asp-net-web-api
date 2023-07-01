@@ -12,6 +12,7 @@ namespace TaskManager.API.Data.Models
         [Key]
         public int Id { get; set; }
         public ROLE_ENUM Role { get; set; }
+        public DateTime VisitDate { get; set; }
         public string UserId { get; set; }
         public int WorkspaceId { get; set; }
         public Account User { get; set; }

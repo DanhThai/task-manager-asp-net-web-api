@@ -20,10 +20,21 @@ namespace TaskManager.API.Services.Repository
             _dapperContext = dapperContext;
         }
         
-        public async Task<Response> CreateLabelAsync(LabelDto labelDto)
+        public async Task<Response> CreateLabelAsync(LabelDto labelDto, string userId)
         {
             try
             {
+                // Check user have permission to assign
+                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
+                    x => x.WorkspaceId == labelDto.WorkspaceId &&
+                    x.UserId == userId);
+                if (mwAdmin.Role == ROLE_ENUM.Member)
+                    return new Response
+                    {
+                        Message = "Bạn không được phép tạo nhãn",
+                        IsSuccess = false
+                    };
+
                 var label = _mapper.Map<LabelDto, Label>(labelDto);
                 _dataContext.Labels.Add(label);
                 var isSaved = await SaveChangeAsync();
@@ -52,10 +63,11 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        public async Task<Response> DeleteLabelAsync(int labelId)
+        public async Task<Response> DeleteLabelAsync(int labelId, string userId)
         {
             try
             {
+                
                 var label = _dataContext.Labels.FirstOrDefault(l => l.Id == labelId);
                 if(label == null){
                     return new Response
@@ -64,6 +76,17 @@ namespace TaskManager.API.Services.Repository
                         IsSuccess = false
                     };
                 }
+                // Check user have permission to assign
+                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
+                    x => x.WorkspaceId == label.WorkspaceId &&
+                    x.UserId == userId);
+                if (mwAdmin.Role == ROLE_ENUM.Member)
+                    return new Response
+                    {
+                        Message = "Bạn không được phép xóa nhãn",
+                        IsSuccess = false
+                    };
+
                 _dataContext.Labels.Remove(label);
                 var isSaved = await SaveChangeAsync();
                 if (isSaved)
@@ -114,10 +137,20 @@ namespace TaskManager.API.Services.Repository
             }
         }
 
-        public async Task<Response> UpdateLabelAsync(int labelId, LabelDto labelDto)
+        public async Task<Response> UpdateLabelAsync(int labelId, string userId, LabelDto labelDto)
         {
             try
             {
+                // Check user have permission to assign
+                var mwAdmin = _dataContext.MemberWorkspaces.FirstOrDefault(
+                    x => x.WorkspaceId == labelDto.WorkspaceId &&
+                    x.UserId == userId);
+                if (mwAdmin.Role == ROLE_ENUM.Member)
+                    return new Response
+                    {
+                        Message = "Bạn không được phép cập nhật nhãn",
+                        IsSuccess = false
+                    };
                 var label = _dataContext.Labels.FirstOrDefault(l => l.Id == labelId);
                 if(label == null)
                     return new Response

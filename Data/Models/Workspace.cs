@@ -13,8 +13,8 @@ namespace TaskManager.API.Data.Models
         [Required, MaxLength(100)]
         public string Title { get; set; }
         public string? Description { get; set; }
-        public string? Logo { get; set; }
-        public string? Background { get; set; }
+        // public string? Logo { get; set; }
+        // public string? Background { get; set; }
         [Required]
         public int Permission { get; set; }
         public string CreatorId { get; set; }
@@ -22,7 +22,7 @@ namespace TaskManager.API.Data.Models
         public DateTime? CreateAt { get; set; }
         public DateTime? UpdateAt { get; set; }
 
-        public DateTime VisitDate { get; set; }
+        // public DateTime VisitDate { get; set; }
         public int TaskQuantity { get; set; } = 0;
         public int TaskCompleted { get; set; } = 0;
         public bool IsComplete { get; set; } = false;

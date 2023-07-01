@@ -51,6 +51,20 @@ namespace TaskManager.API.Controllers
             return BadRequest();
         }
 
+        [HttpGet("up-comming")]
+        public async Task<IActionResult> GetUpCommingTaskItemById(){
+
+            try{
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+                var rs = await _taskItemRepository.GetUpCommingTasksItemAsync(userId); 
+                return Ok(rs);
+            }
+            catch{
+                return NotFound();
+            }
+
+        }
+
         [HttpPut("{id}", Name = "UpdateTaskItemById")]
         public async Task<IActionResult> UpdateTaskItemByUser(int id, [FromQuery]int workspaceId, TaskItemDto taskItemDto){
             try{    
@@ -156,12 +170,12 @@ namespace TaskManager.API.Controllers
             }
         }
 
-        [HttpPost("AcceptDueDate")]
-        public async Task<IActionResult> AcceptExtendDueDate([FromQuery]int workspaceId, [FromBody] MemberTaskDto memberTaskDto){
+        [HttpPost("AcceptDueDate/{memberTaskId}")]
+        public async Task<IActionResult> AcceptExtendDueDate(int memberTaskId, [FromQuery]int workspaceId){
             try{
                 if(workspaceId >0){    
                     var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
-                    var rs = await _taskItemRepository.AcceptExtendDueDateAsync(workspaceId, userId, memberTaskDto); 
+                    var rs = await _taskItemRepository.AcceptExtendDueDateAsync(workspaceId, userId, memberTaskId); 
                     return Ok(rs);
                 }
                 return BadRequest();
@@ -170,8 +184,8 @@ namespace TaskManager.API.Controllers
                 return BadRequest();
             }
         }
-        [HttpPost("RejectDueDate")]
-        public async Task<IActionResult> RejectExtendDueDate([FromQuery]int workspaceId, int memberTaskId){
+        [HttpPost("RejectDueDate/{memberTaskId}")]
+        public async Task<IActionResult> RejectExtendDueDate(int memberTaskId, [FromQuery]int workspaceId){
             try{
                 if(workspaceId >0){    
                     var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
@@ -244,9 +258,11 @@ namespace TaskManager.API.Controllers
         #endregion
 
         [HttpPost("{id}/AddLabels")]
-        public async Task<IActionResult> AddLabelToTaskItem(int id, List<LabelDto> labelDtos){
+        public async Task<IActionResult> AddLabelToTaskItem(int id, int workspaceId, List<LabelDto> labelDtos){
             try{   
-                var rs = await _taskItemRepository.AddLabelToTaskItemAsync(id, labelDtos); 
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);    
+
+                var rs = await _taskItemRepository.AddLabelToTaskItemAsync(id, workspaceId, userId, labelDtos); 
                 return Ok(rs);
             }
             catch{

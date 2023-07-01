@@ -94,8 +94,8 @@ namespace TaskManager.API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteWorkspaceByUser(int id){
             try{
-                // var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                var rs = await _workspaceRepository.DeleteWorkspaceAsync(id); 
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var rs = await _workspaceRepository.DeleteWorkspaceAsync(id, userId); 
                 return Ok(rs);
             }
             catch{
@@ -120,7 +120,8 @@ namespace TaskManager.API.Controllers
         [HttpPost("{id}/Invite")]
         public async Task<IActionResult> InviteUserToWorkspace(int id, MemberWorkspaceDto member){
             try{
-                var rs = await _workspaceRepository.InviteMemberToWorkspaceAsync(id, member); 
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var rs = await _workspaceRepository.InviteMemberToWorkspaceAsync(id, userId, member); 
                 return Ok(rs);
             }
             catch{

@@ -42,6 +42,11 @@ namespace TaskManager.API.Data
                     c.HasOne(c => c.Workspace).WithMany(w => w.Cards).HasForeignKey(c => c.WorkspaceId);
                 }
             );
+            modelBuilder.Entity<Label>(
+                c=>{
+                    c.HasOne(c => c.Workspace).WithMany(w => w.Labels).HasForeignKey(c => c.WorkspaceId);
+                }
+            );
 
             modelBuilder.Entity<TaskItem>(
                 t=>{
@@ -53,11 +58,6 @@ namespace TaskManager.API.Data
                         tl => tl.HasOne<Label>(e => e.Label).WithMany(e => e.TaskLabels),
                         tl => tl.HasOne<TaskItem>(e => e.TaskItem).WithMany(e => e.TaskLabels));
                     t.HasMany(t => t.Subtasks).WithOne(s => s.TaskItem).HasForeignKey(s => s.TaskItemId);
-
-                    // t.HasMany(u => u.Users).WithMany(w => w.TaskItems)
-                    // .UsingEntity<MemberTask>(
-                    //     u => u.HasOne<Account>(e => e.User).WithMany(e => e.MemberTasks),
-                    //     w => w.HasOne<TaskItem>(e => e.TaskItem).WithMany(e => e.MemberTasks));
                 }
             );
 
@@ -72,6 +72,11 @@ namespace TaskManager.API.Data
                 c=>{
                     c.HasOne(c => c.TaskItem).WithMany(t=>t.Comments).HasForeignKey(c => c.TaskItemId);
                     c.HasOne(c => c.User).WithMany(t=>t.Comments).HasForeignKey(c => c.UserId);
+                }
+            );
+            modelBuilder.Entity<Schedule>(
+                c=>{
+                    c.HasOne(c => c.Creator).WithMany(t=>t.Schedules).HasForeignKey(c => c.CreatorId);
                 }
             );
 

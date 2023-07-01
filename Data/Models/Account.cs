@@ -17,6 +17,7 @@ namespace TaskManager.API.Data.Models
         //  Relationships
         public ICollection<MemberWorkspace> MemberWorkspaces { get; set; } = null;
         public ICollection<Workspace> Workspaces { get; set;} = null;
+        public ICollection<Schedule> Schedules { get; set;} = null;
         public ICollection<MemberTask> MemberTasks { get; set;} = null;
         public ICollection<TaskItem> TaskItems { get; set; } = null;
         public ICollection<Activation> Activations { get; set; } = null;

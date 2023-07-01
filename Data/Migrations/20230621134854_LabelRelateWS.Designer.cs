@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TaskManager.API.Data;
 
@@ -10,9 +11,10 @@ using TaskManager.API.Data;
 namespace TaskManager.API.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20230621134854_LabelRelateWS")]
+    partial class LabelRelateWS
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -380,9 +382,6 @@ namespace TaskManager.API.Data.Migrations
                     b.Property<string>("UserId")
                         .HasColumnType("varchar(255)");
 
-                    b.Property<DateTime>("VisitDate")
-                        .HasColumnType("datetime(6)");
-
                     b.Property<int>("WorkspaceId")
                         .HasColumnType("int");
 
@@ -405,17 +404,11 @@ namespace TaskManager.API.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)");
 
-                    b.Property<string>("CreatorId")
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("Description")
+                    b.Property<string>("Content")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)");
 
-                    b.Property<DateTime>("EndDateTime")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("StartDateTime")
+                    b.Property<DateTime>("Date")
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("Title")
@@ -427,8 +420,6 @@ namespace TaskManager.API.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CreatorId");
 
                     b.HasIndex("WorkspaceId");
 
@@ -547,6 +538,9 @@ namespace TaskManager.API.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
+                    b.Property<string>("Background")
+                        .HasColumnType("longtext");
+
                     b.Property<DateTime?>("CreateAt")
                         .HasColumnType("datetime(6)");
 
@@ -561,6 +555,9 @@ namespace TaskManager.API.Data.Migrations
 
                     b.Property<bool>("IsComplete")
                         .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Logo")
+                        .HasColumnType("longtext");
 
                     b.Property<int>("Permission")
                         .HasColumnType("int");
@@ -577,6 +574,9 @@ namespace TaskManager.API.Data.Migrations
                         .HasColumnType("varchar(100)");
 
                     b.Property<DateTime?>("UpdateAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("VisitDate")
                         .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
@@ -729,17 +729,11 @@ namespace TaskManager.API.Data.Migrations
 
             modelBuilder.Entity("TaskManager.API.Data.Models.Schedule", b =>
                 {
-                    b.HasOne("TaskManager.API.Data.Models.Account", "Creator")
-                        .WithMany("Schedules")
-                        .HasForeignKey("CreatorId");
-
                     b.HasOne("TaskManager.API.Data.Models.Workspace", "Workspace")
                         .WithMany("Schedules")
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Creator");
 
                     b.Navigation("Workspace");
                 });
@@ -806,8 +800,6 @@ namespace TaskManager.API.Data.Migrations
                     b.Navigation("MemberTasks");
 
                     b.Navigation("MemberWorkspaces");
-
-                    b.Navigation("Schedules");
 
                     b.Navigation("Subtasks");
 
